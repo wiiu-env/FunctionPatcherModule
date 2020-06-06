@@ -4,7 +4,6 @@
 #include <coreinit/debug.h>
 #include <coreinit/memorymap.h>
 #include <kernel/kernel.h>
-#include "defines.h"
 #include "function_patcher.h"
 #include "logger.h"
 #include "CThread.h"
