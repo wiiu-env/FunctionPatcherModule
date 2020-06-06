@@ -8,7 +8,7 @@
 #include "logger.h"
 #include "CThread.h"
 
-#define DEBUG_LOG_DYN 1
+#define DEBUG_LOG_DYN 0
 
 void writeDataAndFlushIC(CThread *thread, void *arg) {
     uint32_t *data = (uint32_t *) arg;
