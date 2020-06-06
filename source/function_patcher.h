@@ -1,5 +1,5 @@
 #pragma once
-#include "defines.h"
+#include <function_patcher/fpatching_defines.h>
 #include <coreinit/dynload.h>
 
 #ifdef __cplusplus
@@ -11,7 +11,6 @@ typedef struct rpl_handling {
     const char rplname[15];
     OSDynLoad_Module handle;
 } rpl_handling;
-
 
 void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uint32_t size);
 

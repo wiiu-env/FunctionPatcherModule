@@ -1,0 +1,2 @@
+Run via [SetupPayload](https://github.com/wiiu-env/SetupPayload). Requires [wut](https://github.com/decaf-emu/wut) and [libfunctionpatcher](https://github.com/wiiu-env/libfunctionpatcher) for building.
+Install via `make install`.
