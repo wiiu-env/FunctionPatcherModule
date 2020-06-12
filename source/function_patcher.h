@@ -14,6 +14,8 @@ typedef struct rpl_handling {
 
 void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uint32_t size);
 
+void FunctionPatcherRestoreFunctions(function_replacement_data_t *replacements, uint32_t size);
+
 void FunctionPatcherResetLibHandles();
 
 uint32_t getAddressOfFunction(char * functionName, function_replacement_library_type_t type);

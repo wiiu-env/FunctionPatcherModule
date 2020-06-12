@@ -13,3 +13,4 @@ WUMS_APPLICATION_STARTS() {
 }
 
 WUMS_EXPORT_FUNCTION(FunctionPatcherPatchFunction);
+WUMS_EXPORT_FUNCTION(FunctionPatcherRestoreFunctions);

@@ -197,6 +197,43 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
 
 }
 
+void FunctionPatcherRestoreFunctions(function_replacement_data_t *replacements, uint32_t size) {
+    DEBUG_FUNCTION_LINE("Restoring given functions!\n");
+    for (uint32_t i = 0; i < size; i++) {
+        DEBUG_FUNCTION_LINE("Restoring %s... ", replacements[i].function_name);
+        if (replacements[i].restoreInstruction == 0 || replacements[i].realAddr == 0) {
+            DEBUG_FUNCTION_LINE("I dont have the information for the restore =( skip");
+            continue;
+        }
+
+        uint32_t physical = (uint32_t) OSEffectiveToPhysical(replacements[i].realAddr);
+        if (isDynamicFunction(physical)) {
+            WHBLogPrintf("Its a dynamic function. We don't need to restore it!\n", replacements[i].function_name);
+        } else {
+            if (DEBUG_LOG_DYN) {
+                DEBUG_FUNCTION_LINE("Restoring %08X to %08X\n", (uint32_t) replacements[i].restoreInstruction, replacements[i].realAddr);
+            }
+            uint32_t targetAddr = (uint32_t) &replacements[i].restoreInstruction;
+
+            targetAddr = (uint32_t) OSEffectiveToPhysical(targetAddr);
+
+            if (targetAddr == 0 && (targetAddr >= 0x00800000 || targetAddr < 0x01000000)) {
+                targetAddr = targetAddr + 0x30800000 - 0x00800000;
+            }
+
+            KernelCopyData(physical, targetAddr, 4);
+            if (DEBUG_LOG_DYN) {
+                DEBUG_FUNCTION_LINE("ICInvalidateRange %08X\n", (void *) replacements[i].realAddr);
+            }
+            ICInvalidateRange((void *) replacements[i].realAddr, 4);
+            WHBLogPrintf("done\n");
+        }
+        replacements[i].alreadyPatched = 0; // In case a
+    }
+
+    DEBUG_FUNCTION_LINE("Done with restoring given functions!\n");
+}
+
 bool isDynamicFunction(uint32_t physicalAddress) {
     if ((physicalAddress & 0x80000000) == 0x80000000) {
         return 1;
