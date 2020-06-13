@@ -165,6 +165,10 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
             replace_instr = 0x48000002 | (repl_addr_test & 0x03FFFFFC);
         }
 
+        if(space > &function_data->replace_data[FUNCTION_PATCHER_METHOD_STORE_SIZE]){
+            OSFatal("The replacement data is too long.");
+        }
+
         DCFlushRange((void *) function_data->replace_data, FUNCTION_PATCHER_METHOD_STORE_SIZE * 4);
         ICInvalidateRange((void *) function_data->replace_data, FUNCTION_PATCHER_METHOD_STORE_SIZE * 4);
 
