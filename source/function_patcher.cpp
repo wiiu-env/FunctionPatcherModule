@@ -21,7 +21,7 @@ void writeDataAndFlushIC(CThread *thread, void *arg) {
     DCFlushRange(&replace_instruction, 4);
     DCFlushRange(&physical_address, 4);
 
-    DEBUG_FUNCTION_LINE("Write instruction %08X to %08X [%08X] on core %d", replace_instruction, effective_address, physical_address, core / 2);
+    //DEBUG_FUNCTION_LINE("Write instruction %08X to %08X [%08X] on core %d", replace_instruction, effective_address, physical_address, core / 2);
 
     uint32_t replace_instruction_physical = (uint32_t) &replace_instruction;
 
@@ -44,21 +44,21 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
         /* Patch branches to it.  */
         volatile uint32_t *space = function_data->replace_data;
 
-        DEBUG_FUNCTION_LINE_WRITE("Patching %s ...", function_data->function_name);
+        DEBUG_FUNCTION_LINE("Patching %s ...", function_data->function_name);
 
         if (function_data->library == LIBRARY_OTHER) {
-            WHBLogWritef("Oh, using straight PA/VA");
+            WHBLogWritef("Oh, using straight PA/VA\n");
             if (function_data->alreadyPatched == 1) {
-                DEBUG_FUNCTION_LINE("Skipping %s, its already patched", function_data->function_name);
+                DEBUG_FUNCTION_LINE("Skipping %s, its already patched\n", function_data->function_name);
                 continue;
             }
         } else {
             if (function_data->functionType == FUNCTION_PATCHER_STATIC_FUNCTION && function_data->alreadyPatched == 1) {
                 if (isDynamicFunction((uint32_t) OSEffectiveToPhysical(function_data->realAddr))) {
-                    DEBUG_FUNCTION_LINE("INFO: The function %s is a dynamic function.", function_data->function_name);
+                    WHBLogWritef("INFO: The function %s is a dynamic function.\n", function_data->function_name);
                     function_data->functionType = FUNCTION_PATCHER_DYNAMIC_FUNCTION;
                 } else {
-                    WHBLogWritef("Skipping %s, its already patched", function_data->function_name);
+                    WHBLogPrintf("Skipping %s, its already patched\n", function_data->function_name);
                     continue;
                 }
             }
@@ -138,7 +138,7 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
         // If the jump is too big or we want only patch for certain processes we need a trampoline
         if (repl_addr > 0x03FFFFFC || function_data->targetProcess != FP_TARGET_PROCESS_ALL) {
             uint32_t repl_addr_test = (uint32_t) space;
-            if(function_data->targetProcess != FP_TARGET_PROCESS_ALL){
+            if (function_data->targetProcess != FP_TARGET_PROCESS_ALL) {
                 // Only use patched function if OSGetUPID matches function_data->targetProcess
                 *space = 0x3d600000 | (((uint32_t*) OSGetUPID)[0] & 0x0000FFFF); space++;               // lis        r11 ,0x0
                 *space = 0x816b0000 | (((uint32_t*) OSGetUPID)[1] & 0x0000FFFF); space++;               // lwz        r11 ,0x0(r11)
@@ -171,7 +171,7 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
             replace_instr = 0x48000002 | (repl_addr_test & 0x03FFFFFC);
         }
 
-        if(space > &function_data->replace_data[FUNCTION_PATCHER_METHOD_STORE_SIZE]){
+        if (space > &function_data->replace_data[FUNCTION_PATCHER_METHOD_STORE_SIZE]) {
             OSFatal("The replacement data is too long.");
         }
 
@@ -194,7 +194,7 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
 }
 
 void FunctionPatcherRestoreFunctions(function_replacement_data_t *replacements, uint32_t size) {
-    DEBUG_FUNCTION_LINE("Restoring given functions!\n");
+    DEBUG_FUNCTION_LINE("Restoring given functions!");
     for (uint32_t i = 0; i < size; i++) {
         DEBUG_FUNCTION_LINE("Restoring %s... ", replacements[i].function_name);
         if (replacements[i].restoreInstruction == 0 || replacements[i].realAddr == 0) {
@@ -204,10 +204,11 @@ void FunctionPatcherRestoreFunctions(function_replacement_data_t *replacements, 
 
         uint32_t physical = (uint32_t) OSEffectiveToPhysical(replacements[i].realAddr);
         if (isDynamicFunction(physical)) {
-            WHBLogPrintf("Its a dynamic function. We don't need to restore it!\n", replacements[i].function_name);
+            WHBLogPrintf("Its a dynamic function. We don't need to restore it!", replacements[i].function_name);
         } else {
             if (DEBUG_LOG_DYN) {
-                DEBUG_FUNCTION_LINE("Restoring %08X to %08X\n", (uint32_t) replacements[i].restoreInstruction, replacements[i].realAddr);
+                WHBLogPrintf("");
+                DEBUG_FUNCTION_LINE("Restoring %08X to %08X", (uint32_t) replacements[i].restoreInstruction, replacements[i].realAddr);
             }
             uint32_t targetAddr = (uint32_t) &replacements[i].restoreInstruction;
 
@@ -219,15 +220,15 @@ void FunctionPatcherRestoreFunctions(function_replacement_data_t *replacements, 
 
             KernelCopyData(physical, targetAddr, 4);
             if (DEBUG_LOG_DYN) {
-                DEBUG_FUNCTION_LINE("ICInvalidateRange %08X\n", (void *) replacements[i].realAddr);
+                WHBLogPrintf("");
+                DEBUG_FUNCTION_LINE("ICInvalidateRange %08X", (void *) replacements[i].realAddr);
             }
             ICInvalidateRange((void *) replacements[i].realAddr, 4);
-            WHBLogPrintf("done\n");
+            WHBLogWritef("done\n");
         }
         replacements[i].alreadyPatched = 0; // In case a
     }
-
-    DEBUG_FUNCTION_LINE("Done with restoring given functions!\n");
+    DEBUG_FUNCTION_LINE("Done with restoring given functions!");
 }
 
 bool isDynamicFunction(uint32_t physicalAddress) {
