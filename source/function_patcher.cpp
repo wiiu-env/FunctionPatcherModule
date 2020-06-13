@@ -53,10 +53,10 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
                 continue;
             }
         } else {
-            if (function_data->functionType == STATIC_FUNCTION && function_data->alreadyPatched == 1) {
+            if (function_data->functionType == FUNCTION_PATCHER_STATIC_FUNCTION && function_data->alreadyPatched == 1) {
                 if (isDynamicFunction((uint32_t) OSEffectiveToPhysical(function_data->realAddr))) {
                     DEBUG_FUNCTION_LINE("INFO: The function %s is a dynamic function.", function_data->function_name);
-                    function_data->functionType = DYNAMIC_FUNCTION;
+                    function_data->functionType = FUNCTION_PATCHER_DYNAMIC_FUNCTION;
                 } else {
                     WHBLogWritef("Skipping %s, its already patched", function_data->function_name);
                     continue;
