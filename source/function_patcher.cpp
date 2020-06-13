@@ -1,4 +1,3 @@
-
 #include <coreinit/dynload.h>
 #include <coreinit/cache.h>
 #include <coreinit/debug.h>
@@ -38,11 +37,6 @@ void writeDataAndFlushIC(CThread *thread, void *arg) {
 
 
 void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uint32_t size) {
-    uint32_t skip_instr = 1;
-    uint32_t my_instr_len = 4;
-    uint32_t instr_len = my_instr_len + skip_instr + 15;
-    uint32_t flush_len = 4 * instr_len;
-
     for (uint32_t i = 0; i < size; i++) {
         function_replacement_data_t *function_data = &replacements[i];
         /* Patch branches to it.  */
@@ -116,19 +110,12 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
 
         space++;
 
-        //Only works if skip_instr == 1
-        if (skip_instr == 1) {
-            // fill the restore instruction section
-            function_data->realAddr = real_addr;
-            function_data->restoreInstruction = space[-1];
-            if (DEBUG_LOG_DYN) {
-                DEBUG_FUNCTION_LINE("function_data->realAddr = %08X!", function_data->realAddr);
-            }
-            if (DEBUG_LOG_DYN) {
-                DEBUG_FUNCTION_LINE("function_data->restoreInstruction = %08X!", function_data->restoreInstruction);
-            }
-        } else {
-            WHBLogWritef("Error. Can't save %s for restoring!", function_data->function_name);
+        // fill the restore instruction section
+        function_data->realAddr = real_addr;
+        function_data->restoreInstruction = space[-1];
+        if (DEBUG_LOG_DYN) {
+            DEBUG_FUNCTION_LINE("function_data->realAddr = %08X!", function_data->realAddr);
+            DEBUG_FUNCTION_LINE("function_data->restoreInstruction = %08X!", function_data->restoreInstruction);
         }
 
         /*
@@ -138,9 +125,9 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
         00808d08 4e800420      bctr
          */
 
-        *space = 0x3d600000 | (((real_addr + (skip_instr * 4)) >> 16) & 0x0000FFFF);
+        *space = 0x3d600000 | (((real_addr + 4) >> 16) & 0x0000FFFF);
         space++;   // lis        r11 ,0x1234
-        *space = 0x616b0000 | ((real_addr + (skip_instr * 4)) & 0x0000ffff);
+        *space = 0x616b0000 | ((real_addr + 4) & 0x0000ffff);
         space++;           // ori        r11 ,r11 ,0x5678
         *space = 0x7d6903a6;
         space++;                                                           // mtspr      CTR ,r11
@@ -172,8 +159,6 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
         *space = 0x4e800420;
         space++;                                                           // bctr
 
-        DCFlushRange((void *) (((uint32_t) space) - flush_len), flush_len);
-        ICInvalidateRange((void *) (((uint32_t) space) - flush_len), flush_len);
 
         if ((repl_addr_test & 0x03fffffc) != repl_addr_test) {
             OSFatal("Jump is impossible");
@@ -181,6 +166,8 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
 
         //setting jump back
         uint32_t replace_instr = 0x48000002 | (repl_addr_test & 0x03fffffc);
+        DCFlushRange((void *) function_data->replace_data, FUNCTION_PATCHER_METHOD_STORE_SIZE * 4);
+        ICInvalidateRange((void *) function_data->replace_data, FUNCTION_PATCHER_METHOD_STORE_SIZE * 4);
 
         uint32_t data[] = {
                 replace_instr,
