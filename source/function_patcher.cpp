@@ -125,47 +125,44 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
         00808d08 4e800420      bctr
          */
 
-        *space = 0x3d600000 | (((real_addr + 4) >> 16) & 0x0000FFFF);
-        space++;   // lis        r11 ,0x1234
-        *space = 0x616b0000 | ((real_addr + 4) & 0x0000ffff);
-        space++;           // ori        r11 ,r11 ,0x5678
-        *space = 0x7d6903a6;
-        space++;                                                           // mtspr      CTR ,r11
-        *space = 0x4e800420;
-        space++;
-
-
-        uint32_t repl_addr_test = (uint32_t) space;
-        /*
-        // Only use patched function if OSGetUPID is 2 (wii u menu) or 15 (game)
-        *space = 0x3d600000 | (((uint32_t*) OSGetUPID)[0] & 0x0000FFFF); space++;               // lis        r11 ,0x0
-        *space = 0x816b0000 | (((uint32_t*) OSGetUPID)[1] & 0x0000FFFF); space++;               // lwz        r11 ,0x0(r11)
-        *space = 0x2c0b0000 | 0x00000002; space++;                                              // cmpwi      r11 ,0x2
-        *space = 0x41820000 | 0x00000020; space++;                                              // beq        myfunc
-        *space = 0x2c0b0000 | 0x0000000F; space++;                                              // cmpwi      r11 ,0xF
-        *space = 0x41820000 | 0x00000018; space++;                                              // beq        myfunc
-        *space = 0x3d600000 | (((real_addr + (skip_instr * 4)) >> 16) & 0x0000FFFF); space++;   // lis        r11 ,0x1234
-        *space = 0x616b0000 | ((real_addr + (skip_instr * 4)) & 0x0000ffff); space++;           // ori        r11 ,r11 ,0x5678
-        *space = 0x7d6903a6; space++;                                                           // mtspr      CTR ,r11
-        *space = function_data->restoreInstruction; space++;                                    //
-        *space = 0x4e800420; space++;                                                           // bctr*/
-// myfunc:
-        *space = 0x3d600000 | (((repl_addr) >> 16) & 0x0000FFFF);
-        space++;                      // lis        r11 ,0x1234
-        *space = 0x616b0000 | ((repl_addr) & 0x0000ffff);
-        space++;                              // ori        r11 ,r11 ,0x5678
-        *space = 0x7d6903a6;
-        space++;                                                           // mtspr      CTR ,r11
-        *space = 0x4e800420;
-        space++;                                                           // bctr
-
-
-        if ((repl_addr_test & 0x03fffffc) != repl_addr_test) {
-            OSFatal("Jump is impossible");
-        }
+        *space = 0x3d600000 | (((real_addr + 4) >> 16) & 0x0000FFFF); space++;   // lis        r11 ,0x1234
+        *space = 0x616b0000 | ((real_addr + 4) & 0x0000ffff); space++;           // ori        r11 ,r11 ,0x5678
+        *space = 0x7d6903a6; space++;                                            // mtspr      CTR ,r11
+        *space = 0x4e800420; space++;                                            // bctr
 
         //setting jump back
-        uint32_t replace_instr = 0x48000002 | (repl_addr_test & 0x03fffffc);
+        uint32_t replace_instr = 0x48000002 | (repl_addr & 0x03FFFFFC);
+
+        // If the jump is too big we need a trampoline
+        if (repl_addr > 0x03FFFFFC) {
+            uint32_t repl_addr_test = (uint32_t) space;
+            /*
+            // Only use patched function if OSGetUPID is 2 (wii u menu) or 15 (game)
+            *space = 0x3d600000 | (((uint32_t*) OSGetUPID)[0] & 0x0000FFFF); space++;               // lis        r11 ,0x0
+            *space = 0x816b0000 | (((uint32_t*) OSGetUPID)[1] & 0x0000FFFF); space++;               // lwz        r11 ,0x0(r11)
+            *space = 0x2c0b0000 | 0x00000002; space++;                                              // cmpwi      r11 ,0x2
+            *space = 0x41820000 | 0x00000020; space++;                                              // beq        myfunc
+            *space = 0x2c0b0000 | 0x0000000F; space++;                                              // cmpwi      r11 ,0xF
+            *space = 0x41820000 | 0x00000018; space++;                                              // beq        myfunc
+            *space = 0x3d600000 | (((real_addr + (skip_instr * 4)) >> 16) & 0x0000FFFF); space++;   // lis        r11 ,0x1234
+            *space = 0x616b0000 | ((real_addr + (skip_instr * 4)) & 0x0000ffff); space++;           // ori        r11 ,r11 ,0x5678
+            *space = 0x7d6903a6; space++;                                                           // mtspr      CTR ,r11
+            *space = function_data->restoreInstruction; space++;                                    //
+            *space = 0x4e800420; space++;                                                           // bctr*/
+// myfunc:
+            *space = 0x3d600000 | (((repl_addr) >> 16) & 0x0000FFFF); space++;                      // lis        r11 ,0x1234
+            *space = 0x616b0000 | ((repl_addr) & 0x0000ffff); space++;                              // ori        r11 ,r11 ,0x5678
+            *space = 0x7d6903a6; space++;                                                           // mtspr      CTR ,r11
+            *space = 0x4e800420; space++;                                                           // bctr
+
+            // Make sure the trampoline itself is usable.
+            if ((repl_addr_test & 0x03fffffc) != repl_addr_test) {
+                OSFatal("Jump is impossible");
+            }
+
+            replace_instr = 0x48000002 | (repl_addr_test & 0x03FFFFFC);
+        }
+
         DCFlushRange((void *) function_data->replace_data, FUNCTION_PATCHER_METHOD_STORE_SIZE * 4);
         ICInvalidateRange((void *) function_data->replace_data, FUNCTION_PATCHER_METHOD_STORE_SIZE * 4);
 
