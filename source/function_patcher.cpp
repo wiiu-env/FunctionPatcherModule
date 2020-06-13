@@ -35,10 +35,12 @@ void writeDataAndFlushIC(CThread *thread, void *arg) {
     ICInvalidateRange((void *) (effective_address), 4);
 }
 
-
 void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uint32_t size) {
     for (uint32_t i = 0; i < size; i++) {
         function_replacement_data_t *function_data = &replacements[i];
+        if (function_data->VERSION != FUNCTION_REPLACEMENT_DATA_STRUCT_VERSION) {
+            OSFatal("Failed to patch function. struct version mismatch");
+        }
         /* Patch branches to it.  */
         volatile uint32_t *space = function_data->replace_data;
 
