@@ -202,23 +202,34 @@ void FunctionPatcherRestoreFunctions(function_replacement_data_t *replacements, 
             continue;
         }
 
-        uint32_t physical = (uint32_t) OSEffectiveToPhysical(replacements[i].realAddr);
-        if (isDynamicFunction(physical)) {
+        uint32_t targetAddrPhys = (uint32_t) replacements[i].physicalAddr;
+
+        if (replacements[i].library != LIBRARY_OTHER) {
+            targetAddrPhys = (uint32_t) OSEffectiveToPhysical(replacements[i].realAddr);
+        }
+
+        if (isDynamicFunction(targetAddrPhys) &&
+            // Other processes than the wii u menu and game one seem to keep their rpl's loaded.
+            replacements[i].targetProcess != FP_TARGET_PROCESS_GAME_AND_MENU &&
+            replacements[i].targetProcess != FP_TARGET_PROCESS_GAME &&
+            replacements[i].targetProcess != FP_TARGET_PROCESS_WII_U_MENU
+                ) {
             WHBLogPrintf("Its a dynamic function. We don't need to restore it!", replacements[i].function_name);
         } else {
             if (DEBUG_LOG_DYN) {
                 WHBLogPrintf("");
-                DEBUG_FUNCTION_LINE("Restoring %08X to %08X", (uint32_t) replacements[i].restoreInstruction, replacements[i].realAddr);
+                DEBUG_FUNCTION_LINE("Restoring %08X to %08X [%08X]", (uint32_t) replacements[i].restoreInstruction, replacements[i].realAddr, targetAddrPhys);
             }
-            uint32_t targetAddr = (uint32_t) &replacements[i].restoreInstruction;
+            uint32_t sourceAddr = (uint32_t) &replacements[i].restoreInstruction;
 
-            targetAddr = (uint32_t) OSEffectiveToPhysical(targetAddr);
+            uint32_t sourceAddrPhys = (uint32_t) OSEffectiveToPhysical(sourceAddr);
 
-            if (targetAddr == 0 && (targetAddr >= 0x00800000 || targetAddr < 0x01000000)) {
-                targetAddr = targetAddr + 0x30800000 - 0x00800000;
+            // These hardcoded values should be replaced with something more dynamic.
+            if (sourceAddrPhys == 0 && (sourceAddr >= 0x00800000 || sourceAddr < 0x01000000)) {
+                sourceAddrPhys = sourceAddr + 0x30800000 - 0x00800000;
             }
 
-            KernelCopyData(physical, targetAddr, 4);
+            KernelCopyData(targetAddrPhys, sourceAddrPhys, 4);
             if (DEBUG_LOG_DYN) {
                 WHBLogPrintf("");
                 DEBUG_FUNCTION_LINE("ICInvalidateRange %08X", (void *) replacements[i].realAddr);
