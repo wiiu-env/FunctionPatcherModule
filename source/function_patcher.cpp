@@ -2,6 +2,7 @@
 #include <coreinit/cache.h>
 #include <coreinit/debug.h>
 #include <coreinit/memorymap.h>
+#include <coreinit/memdefaultheap.h>
 #include <kernel/kernel.h>
 #include "function_patcher.h"
 #include "logger.h"
@@ -44,25 +45,25 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
         /* Patch branches to it.  */
         volatile uint32_t *space = function_data->replace_data;
 
-        DEBUG_FUNCTION_LINE("Patching %s ...", function_data->function_name);
-
         if (function_data->library == LIBRARY_OTHER) {
-            WHBLogWritef("Oh, using straight PA/VA\n");
+            //WHBLogWritef("Oh, using straight PA/VA\n");
             if (function_data->alreadyPatched == 1) {
-                DEBUG_FUNCTION_LINE("Skipping %s, its already patched\n", function_data->function_name);
+                //DEBUG_FUNCTION_LINE("Skipping %s, its already patched\n", function_data->function_name);
                 continue;
             }
         } else {
-            if (function_data->functionType == FUNCTION_PATCHER_STATIC_FUNCTION && function_data->alreadyPatched == 1) {
-                if (isDynamicFunction((uint32_t) OSEffectiveToPhysical(function_data->realAddr))) {
+            if (function_data->alreadyPatched == 1) {
+                /*if (isDynamicFunction((uint32_t) OSEffectiveToPhysical(function_data->realAddr))) {
                     WHBLogWritef("INFO: The function %s is a dynamic function.\n", function_data->function_name);
                     function_data->functionType = FUNCTION_PATCHER_DYNAMIC_FUNCTION;
-                } else {
-                    WHBLogPrintf("Skipping %s, its already patched\n", function_data->function_name);
+                } else {*/
+                    //WHBLogPrintf("Skipping %s, its already patched\n", function_data->function_name);
                     continue;
-                }
+                //}
             }
         }
+
+        DEBUG_FUNCTION_LINE("Patching %s ...", function_data->function_name);
 
         uint32_t physical = function_data->physicalAddr;
         uint32_t repl_addr = (uint32_t) function_data->replaceAddr;
@@ -189,7 +190,7 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
         DEBUG_FUNCTION_LINE("done with patching %s!", function_data->function_name);
 
     }
-    DEBUG_FUNCTION_LINE("Done with patching given functions!");
+    //DEBUG_FUNCTION_LINE("Done with patching given functions!");
 
 }
 
@@ -215,6 +216,7 @@ void FunctionPatcherRestoreFunctions(function_replacement_data_t *replacements, 
             replacements[i].targetProcess != FP_TARGET_PROCESS_WII_U_MENU
                 ) {
             WHBLogPrintf("Its a dynamic function. We don't need to restore it!", replacements[i].function_name);
+            replacements[i].alreadyPatched = false;
         } else {
             if (DEBUG_LOG_DYN) {
                 WHBLogPrintf("");
@@ -321,18 +323,20 @@ rpl_handling rpl_handles[] __attribute__((section(".data"))) = {
 uint32_t getAddressOfFunction(char *functionName, function_replacement_library_type_t library) {
     uint32_t real_addr = 0;
 
-    OSDynLoad_Module rpl_handle = 0;
+    OSDynLoad_Module rpl_handle = nullptr;
+
+    int err = 0;
 
     int32_t rpl_handles_size = sizeof rpl_handles / sizeof rpl_handles[0];
 
     for (int32_t i = 0; i < rpl_handles_size; i++) {
         if (rpl_handles[i].library == library) {
-            if (rpl_handles[i].handle == 0) {
-                DEBUG_FUNCTION_LINE("Lets acquire handle for rpl: %s", rpl_handles[i].rplname);
-                OSDynLoad_Acquire((char *) rpl_handles[i].rplname, &rpl_handles[i].handle);
+            if (rpl_handles[i].handle == nullptr) {
+                //DEBUG_FUNCTION_LINE("Lets acquire handle for rpl: %s", rpl_handles[i].rplname);
+                err = OSDynLoad_IsModuleLoaded((char *) rpl_handles[i].rplname, &rpl_handles[i].handle);
             }
-            if (rpl_handles[i].handle == 0) {
-                WHBLogWritef("%s failed to acquire", rpl_handles[i].rplname);
+            if (err || !rpl_handles[i].handle) {
+                WHBLogWritef("%s failed to acquire %d %08X\n", rpl_handles[i].rplname, err, rpl_handles[i].handle);
                 return 0;
             }
             rpl_handle = rpl_handles[i].handle;
@@ -340,7 +344,7 @@ uint32_t getAddressOfFunction(char *functionName, function_replacement_library_t
         }
     }
 
-    if (!rpl_handle) {
+    if (err || !rpl_handle) {
         DEBUG_FUNCTION_LINE("Failed to find the RPL handle for %s", functionName);
         return 0;
     }

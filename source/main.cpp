@@ -9,6 +9,7 @@ WUMS_INITIALIZE(){
 }
 
 WUMS_APPLICATION_STARTS() {
+    WHBLogUdpInit();
     FunctionPatcherResetLibHandles();
 }
 
