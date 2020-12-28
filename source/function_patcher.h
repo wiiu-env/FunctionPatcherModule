@@ -12,6 +12,8 @@ typedef struct rpl_handling {
     OSDynLoad_Module handle;
 } rpl_handling;
 
+void FunctionPatcherRestoreDynamicFunctions(function_replacement_data_t *replacements, uint32_t size);
+
 void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uint32_t size);
 
 void FunctionPatcherRestoreFunctions(function_replacement_data_t *replacements, uint32_t size);

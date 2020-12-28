@@ -36,6 +36,24 @@ void writeDataAndFlushIC(CThread *thread, void *arg) {
     ICInvalidateRange((void *) (effective_address), 4);
 }
 
+void FunctionPatcherRestoreDynamicFunctions(function_replacement_data_t *replacements, uint32_t size) {
+    for (uint32_t i = 0; i < size; i++) {
+        function_replacement_data_t *function_data = &replacements[i];
+        if (function_data->VERSION != FUNCTION_REPLACEMENT_DATA_STRUCT_VERSION) {
+            OSFatal("Failed to patch function. struct version mismatch");
+        }
+
+        uint32_t targetAddrPhys = function_data->physicalAddr;
+        if (function_data->library != LIBRARY_OTHER) {
+            targetAddrPhys = (uint32_t) OSEffectiveToPhysical(function_data->realAddr);
+        }
+        if (isDynamicFunction(targetAddrPhys)) {
+            DEBUG_FUNCTION_LINE("Setting alreadyPatched to false for %s because it's a dynamic function", function_data->function_name);
+            function_data->alreadyPatched = 0;
+        }
+    }
+}
+
 void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uint32_t size) {
     for (uint32_t i = 0; i < size; i++) {
         function_replacement_data_t *function_data = &replacements[i];
