@@ -81,7 +81,7 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
             }
         }
 
-        DEBUG_FUNCTION_LINE("Patching %s ...", function_data->function_name);
+        DEBUG_FUNCTION_LINE_VERBOSE("Patching %s ...", function_data->function_name);
 
         uint32_t physical = function_data->physicalAddr;
         uint32_t repl_addr = (uint32_t) function_data->replaceAddr;
@@ -205,17 +205,17 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
         CThread::runOnAllCores(writeDataAndFlushIC, data);
 
         function_data->alreadyPatched = 1;
-        DEBUG_FUNCTION_LINE("done with patching %s!", function_data->function_name);
+        DEBUG_FUNCTION_LINE_VERBOSE("done with patching %s!", function_data->function_name);
 
     }
-    //DEBUG_FUNCTION_LINE("Done with patching given functions!");
+    DEBUG_FUNCTION_LINE_VERBOSE("Done with patching given functions!");
 
 }
 
 void FunctionPatcherRestoreFunctions(function_replacement_data_t *replacements, uint32_t size) {
     DEBUG_FUNCTION_LINE("Restoring given functions!");
     for (uint32_t i = 0; i < size; i++) {
-        DEBUG_FUNCTION_LINE("Restoring %s... ", replacements[i].function_name);
+        DEBUG_FUNCTION_LINE_VERBOSE("Restoring %s... ", replacements[i].function_name);
         if (replacements[i].restoreInstruction == 0 || replacements[i].realAddr == 0) {
             DEBUG_FUNCTION_LINE("I dont have the information for the restore =( skip");
             continue;
@@ -394,7 +394,7 @@ void FunctionPatcherResetLibHandles() {
 
     for (int32_t i = 0; i < rpl_handles_size; i++) {
         if (rpl_handles[i].handle != 0) {
-            DEBUG_FUNCTION_LINE("Resetting handle for rpl: %s", rpl_handles[i].rplname);
+            DEBUG_FUNCTION_LINE_VERBOSE("Resetting handle for rpl: %s", rpl_handles[i].rplname);
         }
         rpl_handles[i].handle = 0;
         // Release handle?
