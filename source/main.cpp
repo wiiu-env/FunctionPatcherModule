@@ -3,12 +3,10 @@
 #include "function_patcher.h"
 WUMS_MODULE_EXPORT_NAME("homebrew_functionpatcher");
 WUMS_MODULE_SKIP_ENTRYPOINT();
-WUMS_MODULE_SKIP_WUT_INIT();
 WUMS_MODULE_INIT_BEFORE_RELOCATION_DONE_HOOK();
 
 WUMS_APPLICATION_STARTS() {
-    // Currently we have no logging because we're skipping the wut init/fini calls.
-    // WHBLogUdpInit();
+    WHBLogUdpInit();
     FunctionPatcherResetLibHandles();
 }
 
