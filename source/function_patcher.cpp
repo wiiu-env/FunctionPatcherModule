@@ -245,7 +245,7 @@ void FunctionPatcherRestoreFunctions(function_replacement_data_t *replacements, 
             uint32_t sourceAddrPhys = (uint32_t) OSEffectiveToPhysical(sourceAddr);
 
             // These hardcoded values should be replaced with something more dynamic.
-            if (sourceAddrPhys == 0 && (sourceAddr >= 0x00800000 || sourceAddr < 0x01000000)) {
+            if (sourceAddrPhys == 0 && (sourceAddr >= 0x00800000 && sourceAddr < 0x01000000)) {
                 sourceAddrPhys = sourceAddr + 0x30800000 - 0x00800000;
             }
 
