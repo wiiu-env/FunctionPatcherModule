@@ -249,6 +249,10 @@ void FunctionPatcherRestoreFunctions(function_replacement_data_t *replacements, 
                 sourceAddrPhys = sourceAddr + 0x30800000 - 0x00800000;
             }
 
+            if(sourceAddrPhys == 0){
+                OSFatal("Failed to get physical address");
+            }
+
             KernelCopyData(targetAddrPhys, sourceAddrPhys, 4);
             if (DEBUG_LOG_DYN) {
                 WHBLogPrintf("");
