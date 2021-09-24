@@ -2,17 +2,13 @@
 #include <coreinit/cache.h>
 #include <coreinit/debug.h>
 #include <coreinit/memorymap.h>
-#include <coreinit/memdefaultheap.h>
 #include <kernel/kernel.h>
 #include "function_patcher.h"
 #include "logger.h"
 #include "CThread.h"
 
-#define DEBUG_LOG_DYN 0
-
 void writeDataAndFlushIC(CThread *thread, void *arg) {
-    uint32_t *data = (uint32_t *) arg;
-    uint16_t core = OSGetThreadAffinity(OSGetCurrentThread());
+    auto *data = (uint32_t *) arg;
 
     DCFlushRange(data, sizeof(uint32_t) * 3);
 
@@ -22,9 +18,9 @@ void writeDataAndFlushIC(CThread *thread, void *arg) {
     DCFlushRange(&replace_instruction, 4);
     DCFlushRange(&physical_address, 4);
 
-    //DEBUG_FUNCTION_LINE("Write instruction %08X to %08X [%08X] on core %d", replace_instruction, effective_address, physical_address, core / 2);
+    DEBUG_FUNCTION_LINE_VERBOSE("Write instruction %08X to %08X [%08X] on core %d", replace_instruction, effective_address, physical_address, OSGetThreadAffinity(OSGetCurrentThread()) / 2);
 
-    uint32_t replace_instruction_physical = (uint32_t) &replace_instruction;
+    auto replace_instruction_physical = (uint32_t) & replace_instruction;
 
     if (replace_instruction_physical < 0x00800000 || replace_instruction_physical >= 0x01000000) {
         replace_instruction_physical = OSEffectiveToPhysical(replace_instruction_physical);
@@ -63,29 +59,16 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
         /* Patch branches to it.  */
         volatile uint32_t *space = function_data->replace_data;
 
-        if (function_data->library == LIBRARY_OTHER) {
-            //WHBLogWritef("Oh, using straight PA/VA\n");
-            if (function_data->alreadyPatched == 1) {
-                //DEBUG_FUNCTION_LINE("Skipping %s, its already patched\n", function_data->function_name);
-                continue;
-            }
-        } else {
-            if (function_data->alreadyPatched == 1) {
-                /*if (isDynamicFunction((uint32_t) OSEffectiveToPhysical(function_data->realAddr))) {
-                    WHBLogWritef("INFO: The function %s is a dynamic function.\n", function_data->function_name);
-                    function_data->functionType = FUNCTION_PATCHER_DYNAMIC_FUNCTION;
-                } else {*/
-                    //WHBLogPrintf("Skipping %s, its already patched\n", function_data->function_name);
-                    continue;
-                //}
-            }
+        if (function_data->alreadyPatched == 1) {
+            DEBUG_FUNCTION_LINE_VERBOSE("Skipping %s, its already patched\n", function_data->function_name);
+            continue;
         }
 
         DEBUG_FUNCTION_LINE_VERBOSE("Patching %s ...", function_data->function_name);
 
         uint32_t physical = function_data->physicalAddr;
-        uint32_t repl_addr = (uint32_t) function_data->replaceAddr;
-        uint32_t call_addr = (uint32_t) function_data->replaceCall;
+        auto repl_addr = (uint32_t) function_data->replaceAddr;
+        auto call_addr = (uint32_t) function_data->replaceCall;
 
         uint32_t real_addr = function_data->virtualAddr;
         if (function_data->library != LIBRARY_OTHER) {
@@ -98,9 +81,7 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
             continue;
         }
 
-        if (DEBUG_LOG_DYN) {
-            DEBUG_FUNCTION_LINE("%s is located at %08X!", function_data->function_name, real_addr);
-        }
+        DEBUG_FUNCTION_LINE_VERBOSE("%s is located at %08X!", function_data->function_name, real_addr);
 
         if (function_data->library != LIBRARY_OTHER) {
             physical = (uint32_t) OSEffectiveToPhysical(real_addr);
@@ -111,13 +92,11 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
             continue;
         }
 
-        if (DEBUG_LOG_DYN) {
-            DEBUG_FUNCTION_LINE("%s physical is located at %08X!", function_data->function_name, physical);
-        }
+        DEBUG_FUNCTION_LINE_VERBOSE("%s physical is located at %08X!", function_data->function_name, physical);
 
-        *(volatile uint32_t *) (call_addr) = (uint32_t) (space);
+        *(volatile uint32_t *) (call_addr) = (uint32_t)(space);
 
-        uint32_t targetAddr = (uint32_t) space;
+        auto targetAddr = (uint32_t) space;
         if (targetAddr < 0x00800000 || targetAddr >= 0x01000000) {
             targetAddr = (uint32_t) OSEffectiveToPhysical(targetAddr);
         } else {
@@ -134,10 +113,9 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
         // fill the restore instruction section
         function_data->realAddr = real_addr;
         function_data->restoreInstruction = space[-1];
-        if (DEBUG_LOG_DYN) {
-            DEBUG_FUNCTION_LINE("function_data->realAddr = %08X!", function_data->realAddr);
-            DEBUG_FUNCTION_LINE("function_data->restoreInstruction = %08X!", function_data->restoreInstruction);
-        }
+
+        DEBUG_FUNCTION_LINE_VERBOSE("function_data->realAddr = %08X!", function_data->realAddr);
+        DEBUG_FUNCTION_LINE_VERBOSE("function_data->restoreInstruction = %08X!", function_data->restoreInstruction);
 
         /*
         00808cfc 3d601234      lis        r11 ,0x1234
@@ -156,7 +134,7 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
 
         // If the jump is too big or we want only patch for certain processes we need a trampoline
         if (repl_addr > 0x03FFFFFC || function_data->targetProcess != FP_TARGET_PROCESS_ALL) {
-            uint32_t repl_addr_test = (uint32_t) space;
+            auto repl_addr_test = (uint32_t) space;
             if (function_data->targetProcess != FP_TARGET_PROCESS_ALL) {
                 // Only use patched function if OSGetUPID matches function_data->targetProcess
                 *space = 0x3d600000 | (((uint32_t*) OSGetUPID)[0] & 0x0000FFFF); space++;               // lis        r11 ,0x0
@@ -221,7 +199,7 @@ void FunctionPatcherRestoreFunctions(function_replacement_data_t *replacements, 
             continue;
         }
 
-        uint32_t targetAddrPhys = (uint32_t) replacements[i].physicalAddr;
+        auto targetAddrPhys = (uint32_t) replacements[i].physicalAddr;
 
         if (replacements[i].library != LIBRARY_OTHER) {
             targetAddrPhys = (uint32_t) OSEffectiveToPhysical(replacements[i].realAddr);
@@ -236,17 +214,14 @@ void FunctionPatcherRestoreFunctions(function_replacement_data_t *replacements, 
             WHBLogPrintf("Its a dynamic function. We don't need to restore it!", replacements[i].function_name);
             replacements[i].alreadyPatched = false;
         } else {
-            if (DEBUG_LOG_DYN) {
-                WHBLogPrintf("");
-                DEBUG_FUNCTION_LINE("Restoring %08X to %08X [%08X]", (uint32_t) replacements[i].restoreInstruction, replacements[i].realAddr, targetAddrPhys);
-            }
-            uint32_t sourceAddr = (uint32_t) &replacements[i].restoreInstruction;
+            DEBUG_FUNCTION_LINE_VERBOSE("\nRestoring %08X to %08X [%08X]", (uint32_t) replacements[i].restoreInstruction, replacements[i].realAddr, targetAddrPhys);
+            auto sourceAddr = (uint32_t) &replacements[i].restoreInstruction;
 
-            uint32_t sourceAddrPhys = (uint32_t) OSEffectiveToPhysical(sourceAddr);
+            auto sourceAddrPhys = (uint32_t) OSEffectiveToPhysical(sourceAddr);
 
             // These hardcoded values should be replaced with something more dynamic.
             if (sourceAddrPhys == 0 && (sourceAddr >= 0x00800000 && sourceAddr < 0x01000000)) {
-                sourceAddrPhys = sourceAddr + 0x30800000 - 0x00800000;
+                sourceAddrPhys = sourceAddr + (0x30800000 - 0x00800000);
             }
 
             if(sourceAddrPhys == 0){
@@ -254,12 +229,9 @@ void FunctionPatcherRestoreFunctions(function_replacement_data_t *replacements, 
             }
 
             KernelCopyData(targetAddrPhys, sourceAddrPhys, 4);
-            if (DEBUG_LOG_DYN) {
-                WHBLogPrintf("");
-                DEBUG_FUNCTION_LINE("ICInvalidateRange %08X", (void *) replacements[i].realAddr);
-            }
+            DEBUG_FUNCTION_LINE_VERBOSE("\nICInvalidateRange %08X", (void *) replacements[i].realAddr);
             ICInvalidateRange((void *) replacements[i].realAddr, 4);
-            WHBLogWritef("done\n");
+            WHB_LOG_PRINTF_VERBOSE("done");
         }
         replacements[i].alreadyPatched = 0; // In case a
     }
@@ -268,78 +240,78 @@ void FunctionPatcherRestoreFunctions(function_replacement_data_t *replacements, 
 
 bool isDynamicFunction(uint32_t physicalAddress) {
     if ((physicalAddress & 0x80000000) == 0x80000000) {
-        return 1;
+        return true;
     }
-    return 0;
+    return false;
 }
 
 rpl_handling rpl_handles[] __attribute__((section(".data"))) = {
-        {LIBRARY_AVM,      "avm.rpl",      0},
-        {LIBRARY_CAMERA,   "camera.rpl",   0},
-        {LIBRARY_COREINIT, "coreinit.rpl", 0},
-        {LIBRARY_DC,       "dc.rpl",       0},
-        {LIBRARY_DMAE,     "dmae.rpl",     0},
-        {LIBRARY_DRMAPP,   "drmapp.rpl",   0},
-        {LIBRARY_ERREULA,  "erreula.rpl",  0},
-        {LIBRARY_GX2,      "gx2.rpl",      0},
-        {LIBRARY_H264,     "h264.rpl",     0},
-        {LIBRARY_LZMA920,  "lzma920.rpl",  0},
-        {LIBRARY_MIC,      "mic.rpl",      0},
-        {LIBRARY_NFC,      "nfc.rpl",      0},
-        {LIBRARY_NIO_PROF, "nio_prof.rpl", 0},
-        {LIBRARY_NLIBCURL, "nlibcurl.rpl", 0},
-        {LIBRARY_NLIBNSS,  "nlibnss.rpl",  0},
-        {LIBRARY_NLIBNSS2, "nlibnss2.rpl", 0},
-        {LIBRARY_NN_AC,    "nn_ac.rpl",    0},
-        {LIBRARY_NN_ACP,   "nn_acp.rpl",   0},
-        {LIBRARY_NN_ACT,   "nn_act.rpl",   0},
-        {LIBRARY_NN_AOC,   "nn_aoc.rpl",   0},
-        {LIBRARY_NN_BOSS,  "nn_boss.rpl",  0},
-        {LIBRARY_NN_CCR,   "nn_ccr.rpl",   0},
-        {LIBRARY_NN_CMPT,  "nn_cmpt.rpl",  0},
-        {LIBRARY_NN_DLP,   "nn_dlp.rpl",   0},
-        {LIBRARY_NN_EC,    "nn_ec.rpl",    0},
-        {LIBRARY_NN_FP,    "nn_fp.rpl",    0},
-        {LIBRARY_NN_HAI,   "nn_hai.rpl",   0},
-        {LIBRARY_NN_HPAD,  "nn_hpad.rpl",  0},
-        {LIBRARY_NN_IDBE,  "nn_idbe.rpl",  0},
-        {LIBRARY_NN_NDM,   "nn_ndm.rpl",   0},
-        {LIBRARY_NN_NETS2, "nn_nets2.rpl", 0},
-        {LIBRARY_NN_NFP,   "nn_nfp.rpl",   0},
-        {LIBRARY_NN_NIM,   "nn_nim.rpl",   0},
-        {LIBRARY_NN_OLV,   "nn_olv.rpl",   0},
-        {LIBRARY_NN_PDM,   "nn_pdm.rpl",   0},
-        {LIBRARY_NN_SAVE,  "nn_save.rpl",  0},
-        {LIBRARY_NN_SL,    "nn_sl.rpl",    0},
-        {LIBRARY_NN_SPM,   "nn_spm.rpl",   0},
-        {LIBRARY_NN_TEMP,  "nn_temp.rpl",  0},
-        {LIBRARY_NN_UDS,   "nn_uds.rpl",   0},
-        {LIBRARY_NN_VCTL,  "nn_vctl.rpl",  0},
-        {LIBRARY_NSYSCCR,  "nsysccr.rpl",  0},
-        {LIBRARY_NSYSHID,  "nsyshid.rpl",  0},
-        {LIBRARY_NSYSKBD,  "nsyskbd.rpl",  0},
-        {LIBRARY_NSYSNET,  "nsysnet.rpl",  0},
-        {LIBRARY_NSYSUHS,  "nsysuhs.rpl",  0},
-        {LIBRARY_NSYSUVD,  "nsysuvd.rpl",  0},
-        {LIBRARY_NTAG,     "ntag.rpl",     0},
-        {LIBRARY_PADSCORE, "padscore.rpl", 0},
-        {LIBRARY_PROC_UI,  "proc_ui.rpl",  0},
-        {LIBRARY_SNDCORE2, "sndcore2.rpl", 0},
-        {LIBRARY_SNDUSER2, "snduser2.rpl", 0},
-        {LIBRARY_SND_CORE, "snd_core.rpl", 0},
-        {LIBRARY_SND_USER, "snd_user.rpl", 0},
-        {LIBRARY_SWKBD,    "swkbd.rpl",    0},
-        {LIBRARY_SYSAPP,   "sysapp.rpl",   0},
-        {LIBRARY_TCL,      "tcl.rpl",      0},
-        {LIBRARY_TVE,      "tve.rpl",      0},
-        {LIBRARY_UAC,      "uac.rpl",      0},
-        {LIBRARY_UAC_RPL,  "uac_rpl.rpl",  0},
-        {LIBRARY_USB_MIC,  "usb_mic.rpl",  0},
-        {LIBRARY_UVC,      "uvc.rpl",      0},
-        {LIBRARY_UVD,      "uvd.rpl",      0},
-        {LIBRARY_VPAD,     "vpad.rpl",     0},
-        {LIBRARY_VPADBASE, "vpadbase.rpl", 0},
-        {LIBRARY_ZLIB125,  "zlib125.rpl",  0}
+        {LIBRARY_AVM,      "avm.rpl",      nullptr},
+        {LIBRARY_CAMERA,   "camera.rpl",   nullptr},
+        {LIBRARY_COREINIT, "coreinit.rpl", nullptr},
+        {LIBRARY_DC,       "dc.rpl",       nullptr},
+        {LIBRARY_DMAE,     "dmae.rpl",     nullptr},
+        {LIBRARY_DRMAPP,   "drmapp.rpl",   nullptr},
+        {LIBRARY_ERREULA,  "erreula.rpl",  nullptr},
+        {LIBRARY_GX2,      "gx2.rpl",      nullptr},
+        {LIBRARY_H264,     "h264.rpl",     nullptr},
+        {LIBRARY_LZMA920,  "lzma920.rpl",  nullptr},
+        {LIBRARY_MIC,      "mic.rpl",      nullptr},
+        {LIBRARY_NFC,      "nfc.rpl",      nullptr},
+        {LIBRARY_NIO_PROF, "nio_prof.rpl", nullptr},
+        {LIBRARY_NLIBCURL, "nlibcurl.rpl", nullptr},
+        {LIBRARY_NLIBNSS,  "nlibnss.rpl",  nullptr},
+        {LIBRARY_NLIBNSS2, "nlibnss2.rpl", nullptr},
+        {LIBRARY_NN_AC,    "nn_ac.rpl",    nullptr},
+        {LIBRARY_NN_ACP,   "nn_acp.rpl",   nullptr},
+        {LIBRARY_NN_ACT,   "nn_act.rpl",   nullptr},
+        {LIBRARY_NN_AOC,   "nn_aoc.rpl",   nullptr},
+        {LIBRARY_NN_BOSS,  "nn_boss.rpl",  nullptr},
+        {LIBRARY_NN_CCR,   "nn_ccr.rpl",   nullptr},
+        {LIBRARY_NN_CMPT,  "nn_cmpt.rpl",  nullptr},
+        {LIBRARY_NN_DLP,   "nn_dlp.rpl",   nullptr},
+        {LIBRARY_NN_EC,    "nn_ec.rpl",    nullptr},
+        {LIBRARY_NN_FP,    "nn_fp.rpl",    nullptr},
+        {LIBRARY_NN_HAI,   "nn_hai.rpl",   nullptr},
+        {LIBRARY_NN_HPAD,  "nn_hpad.rpl",  nullptr},
+        {LIBRARY_NN_IDBE,  "nn_idbe.rpl",  nullptr},
+        {LIBRARY_NN_NDM,   "nn_ndm.rpl",   nullptr},
+        {LIBRARY_NN_NETS2, "nn_nets2.rpl", nullptr},
+        {LIBRARY_NN_NFP,   "nn_nfp.rpl",   nullptr},
+        {LIBRARY_NN_NIM,   "nn_nim.rpl",   nullptr},
+        {LIBRARY_NN_OLV,   "nn_olv.rpl",   nullptr},
+        {LIBRARY_NN_PDM,   "nn_pdm.rpl",   nullptr},
+        {LIBRARY_NN_SAVE,  "nn_save.rpl",  nullptr},
+        {LIBRARY_NN_SL,    "nn_sl.rpl",    nullptr},
+        {LIBRARY_NN_SPM,   "nn_spm.rpl",   nullptr},
+        {LIBRARY_NN_TEMP,  "nn_temp.rpl",  nullptr},
+        {LIBRARY_NN_UDS,   "nn_uds.rpl",   nullptr},
+        {LIBRARY_NN_VCTL,  "nn_vctl.rpl",  nullptr},
+        {LIBRARY_NSYSCCR,  "nsysccr.rpl",  nullptr},
+        {LIBRARY_NSYSHID,  "nsyshid.rpl",  nullptr},
+        {LIBRARY_NSYSKBD,  "nsyskbd.rpl",  nullptr},
+        {LIBRARY_NSYSNET,  "nsysnet.rpl",  nullptr},
+        {LIBRARY_NSYSUHS,  "nsysuhs.rpl",  nullptr},
+        {LIBRARY_NSYSUVD,  "nsysuvd.rpl",  nullptr},
+        {LIBRARY_NTAG,     "ntag.rpl",     nullptr},
+        {LIBRARY_PADSCORE, "padscore.rpl", nullptr},
+        {LIBRARY_PROC_UI,  "proc_ui.rpl",  nullptr},
+        {LIBRARY_SNDCORE2, "sndcore2.rpl", nullptr},
+        {LIBRARY_SNDUSER2, "snduser2.rpl", nullptr},
+        {LIBRARY_SND_CORE, "snd_core.rpl", nullptr},
+        {LIBRARY_SND_USER, "snd_user.rpl", nullptr},
+        {LIBRARY_SWKBD,    "swkbd.rpl",    nullptr},
+        {LIBRARY_SYSAPP,   "sysapp.rpl",   nullptr},
+        {LIBRARY_TCL,      "tcl.rpl",      nullptr},
+        {LIBRARY_TVE,      "tve.rpl",      nullptr},
+        {LIBRARY_UAC,      "uac.rpl",      nullptr},
+        {LIBRARY_UAC_RPL,  "uac_rpl.rpl",  nullptr},
+        {LIBRARY_USB_MIC,  "usb_mic.rpl",  nullptr},
+        {LIBRARY_UVC,      "uvc.rpl",      nullptr},
+        {LIBRARY_UVD,      "uvd.rpl",      nullptr},
+        {LIBRARY_VPAD,     "vpad.rpl",     nullptr},
+        {LIBRARY_VPADBASE, "vpadbase.rpl", nullptr},
+        {LIBRARY_ZLIB125,  "zlib125.rpl",  nullptr}
 };
 
 uint32_t getAddressOfFunction(char *functionName, function_replacement_library_type_t library) {
@@ -347,7 +319,7 @@ uint32_t getAddressOfFunction(char *functionName, function_replacement_library_t
 
     OSDynLoad_Module rpl_handle = nullptr;
 
-    int err = 0;
+    OSDynLoad_Error err = OS_DYNLOAD_OK;
 
     int32_t rpl_handles_size = sizeof rpl_handles / sizeof rpl_handles[0];
 
@@ -357,7 +329,7 @@ uint32_t getAddressOfFunction(char *functionName, function_replacement_library_t
                 //DEBUG_FUNCTION_LINE("Lets acquire handle for rpl: %s", rpl_handles[i].rplname);
                 err = OSDynLoad_IsModuleLoaded((char *) rpl_handles[i].rplname, &rpl_handles[i].handle);
             }
-            if (err || !rpl_handles[i].handle) {
+            if (err != OS_DYNLOAD_OK || !rpl_handles[i].handle) {
                 WHBLogWritef("%s failed to acquire %d %08X\n", rpl_handles[i].rplname, err, rpl_handles[i].handle);
                 return 0;
             }
@@ -366,7 +338,7 @@ uint32_t getAddressOfFunction(char *functionName, function_replacement_library_t
         }
     }
 
-    if (err || !rpl_handle) {
+    if (!rpl_handle) {
         DEBUG_FUNCTION_LINE("Failed to find the RPL handle for %s", functionName);
         return 0;
     }
@@ -378,13 +350,13 @@ uint32_t getAddressOfFunction(char *functionName, function_replacement_library_t
         return 0;
     }
 
-    if ((library == LIBRARY_NN_ACP) && (uint32_t) (*(volatile uint32_t *) (real_addr) & 0x48000002) == 0x48000000) {
-        uint32_t address_diff = (uint32_t) (*(volatile uint32_t *) (real_addr) & 0x03FFFFFC);
+    if ((library == LIBRARY_NN_ACP) && (uint32_t)(*(volatile uint32_t *) (real_addr) & 0x48000002) == 0x48000000) {
+        auto address_diff = (uint32_t)(*(volatile uint32_t *) (real_addr) & 0x03FFFFFC);
         if ((address_diff & 0x03000000) == 0x03000000) {
             address_diff |= 0xFC000000;
         }
         real_addr += (int32_t) address_diff;
-        if ((uint32_t) (*(volatile uint32_t *) (real_addr) & 0x48000002) == 0x48000000) {
+        if ((uint32_t)(*(volatile uint32_t *) (real_addr) & 0x48000002) == 0x48000000) {
             return 0;
         }
     }
@@ -397,10 +369,10 @@ void FunctionPatcherResetLibHandles() {
     int32_t rpl_handles_size = sizeof rpl_handles / sizeof rpl_handles[0];
 
     for (int32_t i = 0; i < rpl_handles_size; i++) {
-        if (rpl_handles[i].handle != 0) {
+        if (rpl_handles[i].handle != nullptr) {
             DEBUG_FUNCTION_LINE_VERBOSE("Resetting handle for rpl: %s", rpl_handles[i].rplname);
         }
-        rpl_handles[i].handle = 0;
+        rpl_handles[i].handle = nullptr;
         // Release handle?
     }
 }

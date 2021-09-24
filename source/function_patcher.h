@@ -1,4 +1,5 @@
 #pragma once
+
 #include <function_patcher/fpatching_defines.h>
 #include <coreinit/dynload.h>
 
@@ -20,7 +21,7 @@ void FunctionPatcherRestoreFunctions(function_replacement_data_t *replacements, 
 
 void FunctionPatcherResetLibHandles();
 
-uint32_t getAddressOfFunction(char * functionName, function_replacement_library_type_t type);
+uint32_t getAddressOfFunction(char *functionName, function_replacement_library_type_t type);
 
 bool isDynamicFunction(uint32_t physicalAddress);
 
