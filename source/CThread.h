@@ -52,10 +52,9 @@ public:
     static void runOnAllCores(CThread::Callback callback, void *callbackArg, int32_t iAttr = 0, int32_t iPriority = 16, int32_t iStackSize = 0x8000) {
         int32_t aff[] = {CThread::eAttributeAffCore2, CThread::eAttributeAffCore1, CThread::eAttributeAffCore0};
 
-        for (int i : aff) {
-            CThread *thread = CThread::create(callback, callbackArg, iAttr | i, iPriority, iStackSize);
-            thread->resumeThread();
-            delete thread;
+        for (int i: aff) {
+            CThread thread(iAttr | i, iPriority, iStackSize, callback, callbackArg);
+            thread.resumeThread();
         }
     }
 
@@ -111,7 +110,7 @@ public:
     }
 
     //! Shutdown thread
-    virtual void shutdownThread() {
+    void shutdownThread() {
         //! wait for thread to finish
         if (pThread && !(iAttributes & eAttributeDetach)) {
             while (isThreadSuspended()) {
