@@ -76,7 +76,6 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
         }
 
         if (!real_addr) {
-            WHBLogWritef("");
             DEBUG_FUNCTION_LINE("OSDynLoad_FindExport failed for %s", function_data->function_name);
             continue;
         }
@@ -88,7 +87,7 @@ void FunctionPatcherPatchFunction(function_replacement_data_t *replacements, uin
         }
 
         if (!physical) {
-            WHBLogWritef("Error. Something is wrong with the physical address");
+            DEBUG_FUNCTION_LINE("Error. Something is wrong with the physical address");
             continue;
         }
 
@@ -211,7 +210,7 @@ void FunctionPatcherRestoreFunctions(function_replacement_data_t *replacements, 
             replacements[i].targetProcess != FP_TARGET_PROCESS_GAME &&
             replacements[i].targetProcess != FP_TARGET_PROCESS_WII_U_MENU
                 ) {
-            WHBLogPrintf("Its a dynamic function. We don't need to restore it!", replacements[i].function_name);
+            DEBUG_FUNCTION_LINE_VERBOSE("Its a dynamic function. We don't need to restore it!", replacements[i].function_name);
             replacements[i].alreadyPatched = false;
         } else {
             DEBUG_FUNCTION_LINE_VERBOSE("\nRestoring %08X to %08X [%08X]", (uint32_t) replacements[i].restoreInstruction, replacements[i].realAddr, targetAddrPhys);
@@ -231,7 +230,7 @@ void FunctionPatcherRestoreFunctions(function_replacement_data_t *replacements, 
             KernelCopyData(targetAddrPhys, sourceAddrPhys, 4);
             DEBUG_FUNCTION_LINE_VERBOSE("\nICInvalidateRange %08X", (void *) replacements[i].realAddr);
             ICInvalidateRange((void *) replacements[i].realAddr, 4);
-            WHB_LOG_PRINTF_VERBOSE("done");
+            DEBUG_FUNCTION_LINE_VERBOSE("done");
         }
         replacements[i].alreadyPatched = 0; // In case a
     }
@@ -330,7 +329,7 @@ uint32_t getAddressOfFunction(char *functionName, function_replacement_library_t
                 err = OSDynLoad_IsModuleLoaded((char *) rpl_handles[i].rplname, &rpl_handles[i].handle);
             }
             if (err != OS_DYNLOAD_OK || !rpl_handles[i].handle) {
-                WHBLogWritef("%s failed to acquire %d %08X\n", rpl_handles[i].rplname, err, rpl_handles[i].handle);
+                DEBUG_FUNCTION_LINE_WRITE("%s failed to acquire %d %08X\n", rpl_handles[i].rplname, err, rpl_handles[i].handle);
                 return 0;
             }
             rpl_handle = rpl_handles[i].handle;
