@@ -8,7 +8,7 @@
 #include "function_patcher.h"
 
 WUMS_MODULE_EXPORT_NAME("homebrew_functionpatcher");
-WUMS_MODULE_SKIP_ENTRYPOINT();
+WUMS_MODULE_SKIP_INIT_FINI();
 
 uint32_t moduleLogInit = false;
 uint32_t cafeLogInit = false;
