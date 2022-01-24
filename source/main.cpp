@@ -9,7 +9,6 @@
 
 WUMS_MODULE_EXPORT_NAME("homebrew_functionpatcher");
 WUMS_MODULE_SKIP_ENTRYPOINT();
-WUMS_MODULE_INIT_BEFORE_RELOCATION_DONE_HOOK();
 
 uint32_t moduleLogInit = false;
 uint32_t cafeLogInit = false;
