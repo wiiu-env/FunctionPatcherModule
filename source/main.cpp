@@ -10,9 +10,11 @@
 WUMS_MODULE_EXPORT_NAME("homebrew_functionpatcher");
 WUMS_MODULE_SKIP_INIT_FINI();
 
+#ifdef DEBUG
 uint32_t moduleLogInit = false;
 uint32_t cafeLogInit = false;
 uint32_t udpLogInit = false;
+#endif
 
 WUMS_APPLICATION_STARTS() {
 #ifdef DEBUG
@@ -22,7 +24,6 @@ WUMS_APPLICATION_STARTS() {
     }
 #endif // DEBUG
     FunctionPatcherResetLibHandles();
-
 }
 
 WUMS_APPLICATION_REQUESTS_EXIT() {
