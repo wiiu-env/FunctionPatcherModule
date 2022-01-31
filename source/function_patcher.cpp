@@ -238,7 +238,7 @@ void FunctionPatcherRestoreFunctions(function_replacement_data_t *replacements, 
 }
 
 bool isDynamicFunction(uint32_t physicalAddress) {
-    if ((physicalAddress & 0x80000000) == 0x80000000) {
+    if ((physicalAddress & 0x80000000) == 0x80000000 && (physicalAddress & 0xFF000000) != 0xFF000000) {
         return true;
     }
     return false;
