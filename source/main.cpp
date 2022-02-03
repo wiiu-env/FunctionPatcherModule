@@ -1,5 +1,5 @@
-#include <wums.h>
 #include "logger.h"
+#include <wums.h>
 
 #include "function_patcher.h"
 
