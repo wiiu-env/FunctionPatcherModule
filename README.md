@@ -1,3 +1,5 @@
+[![CI-Release](https://github.com/wiiu-env/FunctionPatcherModule/actions/workflows/ci.yml/badge.svg)](https://github.com/wiiu-env/FunctionPatcherModule/actions/workflows/ci.yml)
+
 ## Usage
 (`[ENVIRONMENT]` is a placeholder for the actual environment name.)
 
