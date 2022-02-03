@@ -1,7 +1,7 @@
 #pragma once
 
-#include <function_patcher/fpatching_defines.h>
 #include <coreinit/dynload.h>
+#include <function_patcher/fpatching_defines.h>
 
 #ifdef __cplusplus
 extern "C" {
