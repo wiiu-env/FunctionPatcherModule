@@ -1,6 +1,6 @@
 #include "function_patcher.h"
 #include "CThread.h"
-#include "logger.h"
+#include "utils/logger.h"
 #include <coreinit/cache.h>
 #include <coreinit/debug.h>
 #include <coreinit/dynload.h>
