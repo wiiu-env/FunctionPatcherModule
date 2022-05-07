@@ -21,7 +21,7 @@ WUT_ROOT := $(DEVKITPRO)/wut
 #-------------------------------------------------------------------------------
 TARGET		:=	FunctionPatcherModule
 BUILD		:=	build
-SOURCES		:=	source
+SOURCES		:=	source source/utils
 DATA		:=	data
 INCLUDES	:=	source
 
@@ -41,6 +41,11 @@ LDFLAGS	=	-g $(ARCH) $(RPXSPECS) -Wl,-Map,$(notdir $*.map) -T$(WUMS_ROOT)/share/
 ifeq ($(DEBUG),1)
 CXXFLAGS += -DDEBUG -g
 CFLAGS += -DDEBUG -g
+endif
+
+ifeq ($(DEBUG),VERBOSE)
+CXXFLAGS += -DDEBUG -DVERBOSE_DEBUG -g
+CFLAGS += -DDEBUG -DVERBOSE_DEBUG -g
 endif
 
 LIBS	:= -lwums -lwut -lkernel
