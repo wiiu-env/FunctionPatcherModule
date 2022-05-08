@@ -16,6 +16,8 @@
  ****************************************************************************/
 #pragma once
 
+#include "globals.h"
+#include "logger.h"
 #include <coreinit/thread.h>
 #include <cstdint>
 #include <malloc.h>
@@ -26,14 +28,14 @@ public:
     typedef void (*Callback)(CThread *thread, void *arg);
 
     //! constructor
-    explicit CThread(int32_t iAttr, int32_t iPriority = 16, int32_t iStackSize = 0x8000, CThread::Callback callback = NULL, void *callbackArg = NULL)
+    explicit CThread(int32_t iAttr, int32_t iPriority = 16, int32_t iStackSize = 0x8000, CThread::Callback callback = nullptr, void *callbackArg = nullptr)
         : pThread(nullptr), pThreadStack(nullptr), pCallback(callback), pCallbackArg(callbackArg) {
         //! save attribute assignment
         iAttributes = iAttr;
-        //! allocate the thread
-        pThread = (OSThread *) memalign(0x10, sizeof(OSThread));
-        //! allocate the stack
-        pThreadStack = (uint8_t *) memalign(0x20, iStackSize);
+        //! allocate the thread on the default Cafe OS heap
+        pThread = (OSThread *) gRealMEMAllocFromDefaultHeapEx(sizeof(OSThread), 0x10);
+        //! allocate the stack on the default Cafe OS heap
+        pThreadStack = (uint8_t *) gRealMEMAllocFromDefaultHeapEx(iStackSize, 0x20);
         //! create the thread
         if (pThread && pThreadStack) {
             // clang-format off
@@ -53,7 +55,6 @@ public:
 
     static void runOnAllCores(CThread::Callback callback, void *callbackArg, int32_t iAttr = 0, int32_t iPriority = 16, int32_t iStackSize = 0x8000) {
         int32_t aff[] = {CThread::eAttributeAffCore2, CThread::eAttributeAffCore1, CThread::eAttributeAffCore0};
-
         for (int i : aff) {
             CThread thread(iAttr | i, iPriority, iStackSize, callback, callbackArg);
             thread.resumeThread();
@@ -80,7 +81,9 @@ public:
     //! Resume thread
     virtual void resumeThread() {
         if (!isThreadSuspended()) return;
-        if (pThread) OSResumeThread(pThread);
+        if (pThread) {
+            OSResumeThread(pThread);
+        }
     }
 
     //! Set thread priority
@@ -122,10 +125,10 @@ public:
         }
         //! free the thread stack buffer
         if (pThreadStack) {
-            free(pThreadStack);
+            gMEMFreeToDefaultHeap(pThreadStack);
         }
         if (pThread) {
-            free(pThread);
+            gMEMFreeToDefaultHeap(pThread);
         }
         pThread      = nullptr;
         pThreadStack = nullptr;
