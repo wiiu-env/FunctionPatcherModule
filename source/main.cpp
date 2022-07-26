@@ -4,13 +4,15 @@
 #include "utils/globals.h"
 #include "utils/logger.h"
 #include "utils/utils.h"
+#include <coreinit/memdefaultheap.h>
 #include <coreinit/memexpheap.h>
 #include <wums.h>
 
 WUMS_MODULE_EXPORT_NAME("homebrew_functionpatcher");
 WUMS_MODULE_INIT_BEFORE_RELOCATION_DONE_HOOK();
 
-WUMS_INITIALIZE() {
+
+void UpdateFunctionPointer() {
     // We need the real MEMAllocFromDefaultHeapEx/MEMFreeToDefaultHeap function pointer to force-allocate memory on the default heap.
     // Our custom heap doesn't work (yet) for threads and causes an app panic.
     OSDynLoad_Module coreinitModule;
@@ -30,9 +32,14 @@ WUMS_INITIALIZE() {
         OSFatal("OSDynLoad_FindExport for MEMFreeToDefaultHeap");
     }
 
-    gRealMEMAllocFromDefaultHeapEx = (void *(*) (uint32_t, int) ) * allocPtr;
-    gMEMFreeToDefaultHeap          = (void (*)(void *)) * freePtr;
+    gMEMAllocFromDefaultHeapExForThreads = (void *(*) (uint32_t, int) ) * allocPtr;
+    gMEMFreeToDefaultHeapForThreads      = (void (*)(void *)) * freePtr;
+
     OSDynLoad_Release(coreinitModule);
+}
+
+WUMS_INITIALIZE() {
+    UpdateFunctionPointer();
 
     memset(gJumpHeapData, 0, JUMP_HEAP_DATA_SIZE);
     gJumpHeapHandle = MEMCreateExpHeapEx((void *) (gJumpHeapData), JUMP_HEAP_DATA_SIZE, 1);
@@ -65,6 +72,10 @@ WUMS_APPLICATION_STARTS() {
     if (upid != 2 && upid != 15) {
         return;
     }
+
+    // Now we can update the pointer with the "real" functions
+    gMEMAllocFromDefaultHeapExForThreads = MEMAllocFromDefaultHeapEx;
+    gMEMFreeToDefaultHeapForThreads      = MEMFreeToDefaultHeap;
 
     initLogging();
 

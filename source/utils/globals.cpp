@@ -7,5 +7,5 @@ std::shared_ptr<FunctionAddressProvider> gFunctionAddressProvider;
 std::mutex gPatchedFunctionsMutex;
 std::vector<std::shared_ptr<PatchedFunctionData>> gPatchedFunctions;
 
-void *(*gRealMEMAllocFromDefaultHeapEx)(uint32_t size, int align);
-void (*gMEMFreeToDefaultHeap)(void *ptr);
+void *(*gMEMAllocFromDefaultHeapExForThreads)(uint32_t size, int align);
+void (*gMEMFreeToDefaultHeapForThreads)(void *ptr);
