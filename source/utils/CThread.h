@@ -33,9 +33,9 @@ public:
         //! save attribute assignment
         iAttributes = iAttr;
         //! allocate the thread on the default Cafe OS heap
-        pThread = (OSThread *) gRealMEMAllocFromDefaultHeapEx(sizeof(OSThread), 0x10);
+        pThread = (OSThread *) gMEMAllocFromDefaultHeapExForThreads(sizeof(OSThread), 0x10);
         //! allocate the stack on the default Cafe OS heap
-        pThreadStack = (uint8_t *) gRealMEMAllocFromDefaultHeapEx(iStackSize, 0x20);
+        pThreadStack = (uint8_t *) gMEMAllocFromDefaultHeapExForThreads(iStackSize, 0x20);
         //! create the thread
         if (pThread && pThreadStack) {
             // clang-format off
@@ -125,10 +125,10 @@ public:
         }
         //! free the thread stack buffer
         if (pThreadStack) {
-            gMEMFreeToDefaultHeap(pThreadStack);
+            gMEMFreeToDefaultHeapForThreads(pThreadStack);
         }
         if (pThread) {
-            gMEMFreeToDefaultHeap(pThread);
+            gMEMFreeToDefaultHeapForThreads(pThread);
         }
         pThread      = nullptr;
         pThreadStack = nullptr;

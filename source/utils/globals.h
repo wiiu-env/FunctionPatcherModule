@@ -12,5 +12,5 @@ extern std::shared_ptr<FunctionAddressProvider> gFunctionAddressProvider;
 extern std::mutex gPatchedFunctionsMutex;
 extern std::vector<std::shared_ptr<PatchedFunctionData>> gPatchedFunctions;
 
-extern void *(*gRealMEMAllocFromDefaultHeapEx)(uint32_t size, int align);
-extern void (*gMEMFreeToDefaultHeap)(void *ptr);
+extern void *(*gMEMAllocFromDefaultHeapExForThreads)(uint32_t size, int align);
+extern void (*gMEMFreeToDefaultHeapForThreads)(void *ptr);
