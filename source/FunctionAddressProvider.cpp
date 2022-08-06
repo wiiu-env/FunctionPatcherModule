@@ -36,16 +36,14 @@ uint32_t FunctionAddressProvider::getEffectiveAddressOfFunction(function_replace
         return 0;
     }
 
-    if ((library == LIBRARY_NN_ACP) && (uint32_t) (*(volatile uint32_t *) (real_addr) &0x48000002) == 0x48000000) {
-        auto address_diff = (uint32_t) (*(volatile uint32_t *) (real_addr) &0x03FFFFFC);
-        if ((address_diff & 0x03000000) == 0x03000000) {
-            address_diff |= 0xFC000000;
+    uint32_t realAddrData = *((volatile uint32_t *) real_addr);
+
+    if ((realAddrData & 0xFC000003) == 0x48000000) {
+        auto address_diff = (uint32_t) (realAddrData & 0x01FFFFFC);
+        if ((realAddrData & 0x02000000) == 0x02000000) {
+            address_diff = 0xFE000000 + address_diff;
         }
         real_addr += (int32_t) address_diff;
-        if ((uint32_t) (*(volatile uint32_t *) (real_addr) &0x48000002) == 0x48000000) {
-            DEBUG_FUNCTION_LINE_ERR("Error");
-            return 0;
-        }
     }
 
     return real_addr;
