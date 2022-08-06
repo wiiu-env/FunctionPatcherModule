@@ -29,7 +29,7 @@ std::optional<std::shared_ptr<PatchedFunctionData>> PatchedFunctionData::make_sh
 
     ptr->jumpToOriginal = (uint32_t *) MEMAllocFromExpHeapEx(ptr->heapHandle, 0x5 * sizeof(uint32_t), 4);
 
-    if (ptr->replacementFunctionAddress > 0x03FFFFFC || ptr->targetProcess != FP_TARGET_PROCESS_ALL) {
+    if (ptr->replacementFunctionAddress > 0x01FFFFFC || ptr->targetProcess != FP_TARGET_PROCESS_ALL) {
         ptr->jumpDataSize = 15; // We could predict the actual size and save some memory, but at the moment we don't need it.
         ptr->jumpData     = (uint32_t *) MEMAllocFromExpHeapEx(ptr->heapHandle, ptr->jumpDataSize * sizeof(uint32_t), 4);
 
@@ -83,14 +83,15 @@ void PatchedFunctionData::generateJumpToOriginal() {
     uint32_t jumpToAddress = this->realEffectiveFunctionAddress + 4;
 
     this->jumpToOriginal[0] = this->replacedInstruction;
-    if (((uint32_t) jumpToAddress & 0x03FFFFFC) != (uint32_t) jumpToAddress) {
+
+    if (((uint32_t) jumpToAddress & 0x01FFFFFC) != (uint32_t) jumpToAddress) {
         // We need to do a long jump
         this->jumpToOriginal[1] = 0x3d600000 | ((jumpToAddress >> 16) & 0x0000FFFF); // lis        r11 ,0x1234
         this->jumpToOriginal[2] = 0x616b0000 | (jumpToAddress & 0x0000ffff);         // ori        r11 ,r11 ,0x5678
         this->jumpToOriginal[3] = 0x7d6903a6;                                        // mtspr      CTR ,r11
         this->jumpToOriginal[4] = 0x4e800420;                                        // bctr
     } else {
-        this->jumpToOriginal[1] = 0x48000002 | (jumpToAddress & 0x03FFFFFC);
+        this->jumpToOriginal[1] = 0x48000002 | (jumpToAddress & 0x01FFFFFC);
     }
 
     DCFlushRange((void *) this->jumpToOriginal, sizeof(uint32_t) * 5);
@@ -102,10 +103,10 @@ void PatchedFunctionData::generateJumpToOriginal() {
 
 void PatchedFunctionData::generateReplacementJump() {
     //setting jump back
-    this->replaceWithInstruction = 0x48000002 | (this->replacementFunctionAddress & 0x03FFFFFC);
+    this->replaceWithInstruction = 0x48000002 | (this->replacementFunctionAddress & 0x01FFFFFC);
 
-    // If the jump is too big or we want only patch for certain processes we need a trampoline
-    if (this->replacementFunctionAddress > 0x03FFFFFC || this->targetProcess != FP_TARGET_PROCESS_ALL) {
+    // If the jump is too big, or we want only patch for certain processes we need a trampoline
+    if (this->replacementFunctionAddress > 0x01FFFFFC || this->targetProcess != FP_TARGET_PROCESS_ALL) {
         if (!this->jumpData) {
             DEBUG_FUNCTION_LINE_ERR("jumpData was not allocated");
             OSFatal("jumpData was not allocated");
@@ -113,7 +114,7 @@ void PatchedFunctionData::generateReplacementJump() {
         uint32_t offset = 0;
         if (this->targetProcess != FP_TARGET_PROCESS_ALL) {
             auto originalFunctionAddrWithOffset = this->realEffectiveFunctionAddress + 4;
-            bool shortBranchToOriginalPossible  = ((uint32_t) originalFunctionAddrWithOffset & 0x03FFFFFC) == (uint32_t) originalFunctionAddrWithOffset;
+            bool shortBranchToOriginalPossible  = ((uint32_t) originalFunctionAddrWithOffset & 0x01FFFFFC) == (uint32_t) originalFunctionAddrWithOffset;
             // Only use patched function if OSGetUPID matches function_data->targetProcess
             this->jumpData[offset++] = 0x3d600000 | (((uint32_t *) OSGetUPID)[0] & 0x0000FFFF); // lis        r11 ,0x0
             this->jumpData[offset++] = 0x816b0000 | (((uint32_t *) OSGetUPID)[1] & 0x0000FFFF); // lwz        r11 ,0x0(r11)
@@ -128,23 +129,23 @@ void PatchedFunctionData::generateReplacementJump() {
             }
 
             this->jumpData[offset++] = this->replacedInstruction;
-            if (((uint32_t) originalFunctionAddrWithOffset & 0x03FFFFFC) != (uint32_t) originalFunctionAddrWithOffset) {
+            if (((uint32_t) originalFunctionAddrWithOffset & 0x01FFFFFC) != (uint32_t) originalFunctionAddrWithOffset) {
                 this->jumpData[offset++] = 0x3d600000 | (((this->realEffectiveFunctionAddress + 4) >> 16) & 0x0000FFFF); // lis        r11 ,(real_addr + 4)@hi
                 this->jumpData[offset++] = 0x616b0000 | ((this->realEffectiveFunctionAddress + 4) & 0x0000ffff);         // ori        r11 ,(real_addr + 4)@lo
                 this->jumpData[offset++] = 0x7d6903a6;                                                                   // mtspr      CTR ,r11
                 this->jumpData[offset++] = 0x4e800420;                                                                   // bctr
             } else {
-                this->jumpData[offset++] = 0x48000002 | (originalFunctionAddrWithOffset & 0x03FFFFFC);
+                this->jumpData[offset++] = 0x48000002 | (originalFunctionAddrWithOffset & 0x01FFFFFC);
             }
         }
         // myfunc:
-        if (((uint32_t) this->replacementFunctionAddress & 0x03FFFFFC) != (uint32_t) this->replacementFunctionAddress) {
+        if (((uint32_t) this->replacementFunctionAddress & 0x01FFFFFC) != (uint32_t) this->replacementFunctionAddress) {
             this->jumpData[offset++] = 0x3d600000 | (((this->replacementFunctionAddress) >> 16) & 0x0000FFFF); // lis        r11 ,repl_addr@hi
             this->jumpData[offset++] = 0x616b0000 | ((this->replacementFunctionAddress) & 0x0000ffff);         // ori        r11 ,r11 ,repl_addr@lo
             this->jumpData[offset++] = 0x7d6903a6;                                                             // mtspr      CTR ,r11
             this->jumpData[offset]   = 0x4e800420;                                                             // bctr
         } else {
-            this->jumpData[offset] = 0x48000002 | (replacementFunctionAddress & 0x03FFFFFC);
+            this->jumpData[offset] = 0x48000002 | (replacementFunctionAddress & 0x01FFFFFC);
         }
 
         if (offset >= this->jumpDataSize) {
@@ -153,12 +154,12 @@ void PatchedFunctionData::generateReplacementJump() {
         }
 
         // Make sure the trampoline itself is usable.
-        if (((uint32_t) this->jumpData & 0x03FFFFFC) != (uint32_t) this->jumpData) {
+        if (((uint32_t) this->jumpData & 0x01FFFFFC) != (uint32_t) this->jumpData) {
             DEBUG_FUNCTION_LINE_ERR("Jump is impossible");
             OSFatal("Jump is impossible");
         }
 
-        this->replaceWithInstruction = 0x48000002 | ((uint32_t) this->jumpData & 0x03FFFFFC);
+        this->replaceWithInstruction = 0x48000002 | ((uint32_t) this->jumpData & 0x01FFFFFC);
 
         DCFlushRange((void *) this->jumpData, sizeof(uint32_t) * 15);
         ICInvalidateRange((void *) this->jumpData, sizeof(uint32_t) * 15);
