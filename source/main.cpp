@@ -11,7 +11,6 @@
 WUMS_MODULE_EXPORT_NAME("homebrew_functionpatcher");
 WUMS_MODULE_INIT_BEFORE_RELOCATION_DONE_HOOK();
 
-
 void UpdateFunctionPointer() {
     // We need the real MEMAllocFromDefaultHeapEx/MEMFreeToDefaultHeap function pointer to force-allocate memory on the default heap.
     // Our custom heap doesn't work (yet) for threads and causes an app panic.
@@ -38,8 +37,13 @@ void UpdateFunctionPointer() {
     OSDynLoad_Release(coreinitModule);
 }
 
+uint32_t gDoFunctionResets;
+
 WUMS_INITIALIZE() {
     UpdateFunctionPointer();
+
+    // don't reset the patch status on the first launch.
+    gDoFunctionResets = false;
 
     memset(gJumpHeapData, 0, JUMP_HEAP_DATA_SIZE);
     gJumpHeapHandle = MEMCreateExpHeapEx((void *) (gJumpHeapData), JUMP_HEAP_DATA_SIZE, 1);
@@ -81,24 +85,34 @@ WUMS_APPLICATION_STARTS() {
 
     std::lock_guard<std::mutex> lock(gPatchedFunctionsMutex);
 
-    DEBUG_FUNCTION_LINE_VERBOSE("Reset patch status");
-    // Reset all dynamic functions
-    for (auto &cur : gPatchedFunctions) {
-        if (cur->isDynamicFunction()) {
-            if (cur->functionName) {
-                DEBUG_FUNCTION_LINE_VERBOSE("%s is dynamic, reset patched status", cur->functionName->c_str());
+    // Avoid resetting the patch status of function on the first start.
+    // WUMS_INITIALIZE & WUMS_APPLICATION_STARTS are called during the same application => the .rpl won't get reloaded.
+    // If the .rpl won't get reloaded, old patches will still be present. This can be an issue if a module patches a
+    // dynamic function in WUMS_INITIALIZE, which is called right before the first time this function will be called.
+    // This reset code would mark it as unpatched, while the code is actually still patched, leading to patching an
+    // already patched function.
+    // To avoid this issues, the need to skip the reset status part the first time.
+    if (gDoFunctionResets) {
+        DEBUG_FUNCTION_LINE_VERBOSE("Reset patch status");
+        // Reset all dynamic functions
+        for (auto &cur : gPatchedFunctions) {
+            if (cur->isDynamicFunction()) {
+                if (cur->functionName) {
+                    DEBUG_FUNCTION_LINE_VERBOSE("%s is dynamic, reset patched status", cur->functionName->c_str());
+                } else {
+                    DEBUG_FUNCTION_LINE_VERBOSE("is dynamic, reset patched status");
+                }
+                cur->isPatched = false;
             } else {
-                DEBUG_FUNCTION_LINE_VERBOSE("is dynamic, reset patched status");
-            }
-            cur->isPatched = false;
-        } else {
-            if (cur->functionName) {
-                DEBUG_FUNCTION_LINE_VERBOSE("Skip %s for targetProcess %d", cur->functionName->c_str(), cur->targetProcess);
-            } else {
-                DEBUG_FUNCTION_LINE_VERBOSE("Skip %08X for targetProcess %d", cur->realEffectiveFunctionAddress, cur->targetProcess);
+                if (cur->functionName) {
+                    DEBUG_FUNCTION_LINE_VERBOSE("Skip %s for targetProcess %d", cur->functionName->c_str(), cur->targetProcess);
+                } else {
+                    DEBUG_FUNCTION_LINE_VERBOSE("Skip %08X for targetProcess %d", cur->realEffectiveFunctionAddress, cur->targetProcess);
+                }
             }
         }
     }
+    gDoFunctionResets = true;
 
     OSMemoryBarrier();
 
