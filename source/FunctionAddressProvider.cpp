@@ -55,7 +55,6 @@ void FunctionAddressProvider::resetHandles() {
     for (int32_t i = 0; i < rpl_handles_size; i++) {
         if (rpl_handles[i].handle != nullptr) {
             DEBUG_FUNCTION_LINE_VERBOSE("Resetting handle for rpl: %s", rpl_handles[i].rplname);
-            OSDynLoad_Release(rpl_handles[i].handle);
         }
 
         rpl_handles[i].handle = nullptr;
