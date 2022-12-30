@@ -7,19 +7,18 @@ uint32_t FunctionAddressProvider::getEffectiveAddressOfFunction(function_replace
     uint32_t real_addr          = 0;
     OSDynLoad_Module rpl_handle = nullptr;
     OSDynLoad_Error err         = OS_DYNLOAD_OK;
-    int32_t rpl_handles_size    = sizeof rpl_handles / sizeof rpl_handles[0];
 
-    for (int32_t i = 0; i < rpl_handles_size; i++) {
-        if (rpl_handles[i].library == library) {
-            if (rpl_handles[i].handle == nullptr) {
-                DEBUG_FUNCTION_LINE_VERBOSE("Lets acquire handle for rpl: %s", rpl_handles[i].rplname);
-                err = OSDynLoad_IsModuleLoaded((char *) rpl_handles[i].rplname, &rpl_handles[i].handle);
+    for (auto &rplHandle : rpl_handles) {
+        if (rplHandle.library == library) {
+            if (rplHandle.handle == nullptr) {
+                DEBUG_FUNCTION_LINE_VERBOSE("Lets acquire handle for rpl: %s", rplHandle.rplname);
+                err = OSDynLoad_IsModuleLoaded((char *) rplHandle.rplname, &rplHandle.handle);
             }
-            if (err != OS_DYNLOAD_OK || !rpl_handles[i].handle) {
-                DEBUG_FUNCTION_LINE_VERBOSE("%s is not loaded yet", rpl_handles[i].rplname, err, rpl_handles[i].handle);
+            if (err != OS_DYNLOAD_OK || !rplHandle.handle) {
+                DEBUG_FUNCTION_LINE_VERBOSE("%s is not loaded yet", rplHandle.rplname, err, rplHandle.handle);
                 return 0;
             }
-            rpl_handle = rpl_handles[i].handle;
+            rpl_handle = rplHandle.handle;
             break;
         }
     }
@@ -50,13 +49,11 @@ uint32_t FunctionAddressProvider::getEffectiveAddressOfFunction(function_replace
 }
 
 void FunctionAddressProvider::resetHandles() {
-    int32_t rpl_handles_size = sizeof rpl_handles / sizeof rpl_handles[0];
-
-    for (int32_t i = 0; i < rpl_handles_size; i++) {
-        if (rpl_handles[i].handle != nullptr) {
-            DEBUG_FUNCTION_LINE_VERBOSE("Resetting handle for rpl: %s", rpl_handles[i].rplname);
+    for (auto &rplHandle : rpl_handles) {
+        if (rplHandle.handle != nullptr) {
+            DEBUG_FUNCTION_LINE_VERBOSE("Resetting handle for rpl: %s", rplHandle.rplname);
         }
 
-        rpl_handles[i].handle = nullptr;
+        rplHandle.handle = nullptr;
     }
 }

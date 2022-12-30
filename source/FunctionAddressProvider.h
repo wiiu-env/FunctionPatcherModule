@@ -3,6 +3,7 @@
 #include <coreinit/dynload.h>
 #include <cstdint>
 #include <function_patcher/fpatching_defines.h>
+#include <list>
 
 typedef struct rpl_handling {
     function_replacement_library_type_t library;
@@ -15,7 +16,7 @@ public:
     uint32_t getEffectiveAddressOfFunction(function_replacement_library_type_t library, const char *functionName);
     void resetHandles();
 
-    rpl_handling rpl_handles[LIBRARY_OTHER] = {
+    std::list<rpl_handling> rpl_handles = {
             {LIBRARY_AVM, "avm.rpl", nullptr},
             {LIBRARY_CAMERA, "camera.rpl", nullptr},
             {LIBRARY_COREINIT, "coreinit.rpl", nullptr},
