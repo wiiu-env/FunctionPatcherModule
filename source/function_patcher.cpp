@@ -31,12 +31,12 @@ static void writeDataAndFlushIC(CThread *thread, void *arg) {
 }
 
 bool PatchFunction(std::shared_ptr<PatchedFunctionData> &patchedFunction) {
-    // The addresses of a function might change every time with run another application.
-    if (!patchedFunction->updateFunctionAddresses()) {
+    if (patchedFunction->isPatched) {
         return true;
     }
 
-    if (patchedFunction->isPatched) {
+    // The addresses of a function might change every time with run another application.
+    if (!patchedFunction->updateFunctionAddresses()) {
         return true;
     }
 
