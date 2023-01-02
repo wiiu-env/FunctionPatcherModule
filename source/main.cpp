@@ -96,6 +96,17 @@ void notify_callback(OSDynLoad_Module module,
         for (auto &cur : gPatchedFunctions) {
             PatchFunction(cur);
         }
+    } else if (reason == OS_DYNLOAD_NOTIFY_UNLOADED) {
+        std::lock_guard<std::mutex> lock(gPatchedFunctionsMutex);
+        auto library = gFunctionAddressProvider->getTypeForHandle(module);
+        if (library != LIBRARY_OTHER) {
+            for (auto &cur : gPatchedFunctions) {
+                if (cur->library == library) {
+                    cur->isPatched = false;
+                }
+            }
+        }
+        CheckIfPatchedFunctionsAreStillInMemory();
     }
 }
 

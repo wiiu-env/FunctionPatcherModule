@@ -57,3 +57,13 @@ void FunctionAddressProvider::resetHandles() {
         rplHandle.handle = nullptr;
     }
 }
+
+function_replacement_library_type_t FunctionAddressProvider::getTypeForHandle(OSDynLoad_Module handle) {
+    for (auto &rplHandle : rpl_handles) {
+        if (rplHandle.handle == handle) {
+            return rplHandle.library;
+        }
+    }
+    return LIBRARY_OTHER;
+}
+
