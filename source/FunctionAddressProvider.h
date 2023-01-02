@@ -18,6 +18,8 @@ public:
 
     function_replacement_library_type_t getTypeForHandle(OSDynLoad_Module toReset);
 
+    bool resetHandle(OSDynLoad_Module handle);
+
     std::list<rpl_handling> rpl_handles = {
             {LIBRARY_AVM, "avm.rpl", nullptr},
             {LIBRARY_CAMERA, "camera.rpl", nullptr},
