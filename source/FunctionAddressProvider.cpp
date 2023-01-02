@@ -67,3 +67,12 @@ function_replacement_library_type_t FunctionAddressProvider::getTypeForHandle(OS
     return LIBRARY_OTHER;
 }
 
+bool FunctionAddressProvider::resetHandle(OSDynLoad_Module handle) {
+    for (auto &rplHandle : rpl_handles) {
+        if (rplHandle.handle == handle) {
+            rplHandle.handle = nullptr;
+            return true;
+        }
+    }
+    return false;
+}

@@ -106,6 +106,7 @@ void notify_callback(OSDynLoad_Module module,
                 }
             }
         }
+        gFunctionAddressProvider->resetHandle(module);
         CheckIfPatchedFunctionsAreStillInMemory();
     }
 }
