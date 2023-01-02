@@ -6,6 +6,8 @@
 #include "utils/utils.h"
 #include <coreinit/memdefaultheap.h>
 #include <coreinit/memexpheap.h>
+#include <ranges>
+#include <set>
 #include <wums.h>
 
 WUMS_MODULE_EXPORT_NAME("homebrew_functionpatcher");
@@ -37,13 +39,39 @@ void UpdateFunctionPointer() {
     OSDynLoad_Release(coreinitModule);
 }
 
-uint32_t gDoFunctionResets;
+void CheckIfPatchedFunctionsAreStillInMemory() {
+    std::lock_guard<std::mutex> lock(gPatchedFunctionsMutex);
+    // Check if rpl has been unloaded by comparing the instruction.
+    std::set<uint32_t> physicalAddressesUnchanged;
+    std::set<uint32_t> physicalAddressesChanged;
+    // Restore function patches that were done after the patch we actually want to restore.
+    for (auto &cur : std::ranges::reverse_view(gPatchedFunctions)) {
+        if (!cur->isPatched || physicalAddressesUnchanged.contains(cur->realPhysicalFunctionAddress)) {
+            continue;
+        }
+        if (physicalAddressesChanged.contains(cur->realPhysicalFunctionAddress)) {
+            cur->isPatched = false;
+            continue;
+        }
+
+        // Check if patched instruction is still loaded.
+        uint32_t currentInstruction;
+        if (!ReadFromPhysicalAddress(cur->realPhysicalFunctionAddress, &currentInstruction)) {
+            DEBUG_FUNCTION_LINE_ERR("Failed to read instruction.");
+            continue;
+        }
+
+        if (currentInstruction == cur->replaceWithInstruction) {
+            physicalAddressesUnchanged.insert(cur->realPhysicalFunctionAddress);
+        } else {
+            cur->isPatched = false;
+            physicalAddressesChanged.insert(cur->realPhysicalFunctionAddress);
+        }
+    }
+}
 
 WUMS_INITIALIZE() {
     UpdateFunctionPointer();
-
-    // don't reset the patch status on the first launch.
-    gDoFunctionResets = false;
 
     memset(gJumpHeapData, 0, JUMP_HEAP_DATA_SIZE);
     gJumpHeapHandle = MEMCreateExpHeapEx((void *) (gJumpHeapData), JUMP_HEAP_DATA_SIZE, 1);
@@ -82,46 +110,18 @@ WUMS_APPLICATION_STARTS() {
     gMEMFreeToDefaultHeapForThreads      = MEMFreeToDefaultHeap;
 
     initLogging();
-
-    std::lock_guard<std::mutex> lock(gPatchedFunctionsMutex);
-
-    // Avoid resetting the patch status of function on the first start.
-    // WUMS_INITIALIZE & WUMS_APPLICATION_STARTS are called during the same application => the .rpl won't get reloaded.
-    // If the .rpl won't get reloaded, old patches will still be present. This can be an issue if a module patches a
-    // dynamic function in WUMS_INITIALIZE, which is called right before the first time this function will be called.
-    // This reset code would mark it as unpatched, while the code is actually still patched, leading to patching an
-    // already patched function.
-    // To avoid this issues, the need to skip the reset status part the first time.
-    if (gDoFunctionResets) {
-        DEBUG_FUNCTION_LINE_VERBOSE("Reset patch status");
-        // Reset all dynamic functions
+    {
+        std::lock_guard<std::mutex> lock(gPatchedFunctionsMutex);
+        // reset function patch status if the rpl they were patching has been unloaded from memory.
+        CheckIfPatchedFunctionsAreStillInMemory();
+        DEBUG_FUNCTION_LINE_VERBOSE("Patch all functions");
         for (auto &cur : gPatchedFunctions) {
-            if (cur->isDynamicFunction()) {
-                if (cur->functionName) {
-                    DEBUG_FUNCTION_LINE_VERBOSE("%s is dynamic, reset patched status", cur->functionName->c_str());
-                } else {
-                    DEBUG_FUNCTION_LINE_VERBOSE("is dynamic, reset patched status");
-                }
-                cur->isPatched = false;
-            } else {
-                if (cur->functionName) {
-                    DEBUG_FUNCTION_LINE_VERBOSE("Skip %s for targetProcess %d", cur->functionName->c_str(), cur->targetProcess);
-                } else {
-                    DEBUG_FUNCTION_LINE_VERBOSE("Skip %08X for targetProcess %d", cur->realEffectiveFunctionAddress, cur->targetProcess);
-                }
-            }
+            PatchFunction(cur);
         }
+
+        OSMemoryBarrier();
+        OSDynLoad_AddNotifyCallback(notify_callback, nullptr);
     }
-    gDoFunctionResets = true;
-
-    OSMemoryBarrier();
-
-    DEBUG_FUNCTION_LINE_VERBOSE("Patch all functions");
-    for (auto &cur : gPatchedFunctions) {
-        PatchFunction(cur);
-    }
-
-    OSDynLoad_AddNotifyCallback(notify_callback, nullptr);
 }
 
 WUMS_APPLICATION_REQUESTS_EXIT() {

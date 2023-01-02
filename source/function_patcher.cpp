@@ -3,6 +3,7 @@
 #include "PatchedFunctionData.h"
 #include "utils/CThread.h"
 #include "utils/logger.h"
+#include "utils/utils.h"
 #include <coreinit/cache.h>
 #include <coreinit/debug.h>
 #include <coreinit/memorymap.h>
@@ -98,31 +99,36 @@ bool RestoreFunction(std::shared_ptr<PatchedFunctionData> &patchedFunction) {
         targetAddrPhys = (uint32_t) OSEffectiveToPhysical(patchedFunction->realEffectiveFunctionAddress);
     }
 
-    if (patchedFunction->isDynamicFunction() &&
-        // Other processes than the wii u menu and game one seem to keep their rpl's loaded.
-        patchedFunction->targetProcess != FP_TARGET_PROCESS_GAME_AND_MENU &&
-        patchedFunction->targetProcess != FP_TARGET_PROCESS_GAME &&
-        patchedFunction->targetProcess != FP_TARGET_PROCESS_WII_U_MENU) {
-        DEBUG_FUNCTION_LINE_VERBOSE("Its a dynamic function. We don't need to restore it!");
-    } else {
-        DEBUG_FUNCTION_LINE_VERBOSE("Restoring %08X to %08X [%08X]", (uint32_t) patchedFunction->replacedInstruction, patchedFunction->realEffectiveFunctionAddress, targetAddrPhys);
-        auto sourceAddr = (uint32_t) &patchedFunction->replacedInstruction;
-
-        auto sourceAddrPhys = (uint32_t) OSEffectiveToPhysical(sourceAddr);
-
-        // These hardcoded values should be replaced with something more dynamic.
-        if (sourceAddrPhys == 0 && (sourceAddr >= 0x00800000 && sourceAddr < 0x01000000)) {
-            sourceAddrPhys = sourceAddr + (0x30800000 - 0x00800000);
-        }
-
-        if (sourceAddrPhys == 0) {
-            OSFatal("Failed to get physical address");
-        }
-
-        KernelCopyData(targetAddrPhys, sourceAddrPhys, 4);
-        ICInvalidateRange((void *) patchedFunction->realEffectiveFunctionAddress, 4);
-        DCFlushRange((void *) patchedFunction->realEffectiveFunctionAddress, 4);
+    // Check if patched instruction is still loaded.
+    uint32_t currentInstruction;
+    if (!ReadFromPhysicalAddress(patchedFunction->realPhysicalFunctionAddress, &currentInstruction)) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to read instruction.");
+        return false;
     }
+
+    if (currentInstruction != patchedFunction->replaceWithInstruction) {
+        DEBUG_FUNCTION_LINE_WARN("Instruction is different than expected. Skip restoring. Expected: %08X Real: %08X", currentInstruction, patchedFunction->replaceWithInstruction);
+        return false;
+    }
+
+    DEBUG_FUNCTION_LINE_VERBOSE("Restoring %08X to %08X [%08X]", (uint32_t) patchedFunction->replacedInstruction, patchedFunction->realEffectiveFunctionAddress, targetAddrPhys);
+    auto sourceAddr = (uint32_t) &patchedFunction->replacedInstruction;
+
+    auto sourceAddrPhys = (uint32_t) OSEffectiveToPhysical(sourceAddr);
+
+    // These hardcoded values should be replaced with something more dynamic.
+    if (sourceAddrPhys == 0 && (sourceAddr >= 0x00800000 && sourceAddr < 0x01000000)) {
+        sourceAddrPhys = sourceAddr + (0x30800000 - 0x00800000);
+    }
+
+    if (sourceAddrPhys == 0) {
+        OSFatal("Failed to get physical address");
+    }
+
+    KernelCopyData(targetAddrPhys, sourceAddrPhys, 4);
+    ICInvalidateRange((void *) patchedFunction->realEffectiveFunctionAddress, 4);
+    DCFlushRange((void *) patchedFunction->realEffectiveFunctionAddress, 4);
+
     patchedFunction->isPatched = false;
     return true;
 }

@@ -171,18 +171,6 @@ void PatchedFunctionData::generateReplacementJump() {
     OSMemoryBarrier();
 }
 
-bool PatchedFunctionData::isDynamicFunction() const {
-    if (this->library == LIBRARY_OTHER) {
-        return false;
-    }
-    if ((this->realPhysicalFunctionAddress & 0x80000000) == 0x80000000 && (this->realPhysicalFunctionAddress & 0xFF000000) != 0xFF000000) {
-        if (this->targetProcess == FP_TARGET_PROCESS_GAME_AND_MENU || this->targetProcess == FP_TARGET_PROCESS_GAME || this->targetProcess == FP_TARGET_PROCESS_WII_U_MENU) {
-            return true;
-        }
-    }
-    return false;
-}
-
 PatchedFunctionData::~PatchedFunctionData() {
     if (this->jumpToOriginal) {
         MEMFreeToExpHeap(this->heapHandle, this->jumpToOriginal);

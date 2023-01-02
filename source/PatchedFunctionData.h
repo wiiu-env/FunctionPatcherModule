@@ -36,8 +36,6 @@ public:
         return (uint32_t) this;
     }
 
-    [[nodiscard]] bool isDynamicFunction() const;
-
     uint32_t *jumpToOriginal{};
     uint32_t *jumpData{};
 
