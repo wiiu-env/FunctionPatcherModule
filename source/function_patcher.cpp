@@ -47,25 +47,11 @@ bool PatchFunction(std::shared_ptr<PatchedFunctionData> &patchedFunction) {
         DEBUG_FUNCTION_LINE("Patching function @ %08X", patchedFunction->realEffectiveFunctionAddress);
     }
 
-    volatile uint32_t replacedInstruction;
-
-    auto targetAddress = (uint32_t) &replacedInstruction;
-    if (targetAddress < 0x00800000 || targetAddress >= 0x01000000) {
-        targetAddress = (uint32_t) OSEffectiveToPhysical(targetAddress);
-    } else {
-        targetAddress = targetAddress + 0x30800000 - 0x00800000;
-    }
-
-    if (targetAddress == 0) {
-        DEBUG_FUNCTION_LINE_ERR("Failed to get physical address");
-        OSFatal("Failed to get physical address");
+    if (!ReadFromPhysicalAddress(patchedFunction->realPhysicalFunctionAddress, &patchedFunction->replacedInstruction)) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to read instruction.");
+        OSFatal("Failed to read instruction.");
         return false;
     }
-
-    // Save the instruction we will replace.
-    KernelCopyData(targetAddress, patchedFunction->realPhysicalFunctionAddress, 4);
-    DCFlushRange((void *) &replacedInstruction, 4);
-    patchedFunction->replacedInstruction = replacedInstruction;
 
     // Generate a jump to the original function so the unpatched function can still be called
     patchedFunction->generateJumpToOriginal();
