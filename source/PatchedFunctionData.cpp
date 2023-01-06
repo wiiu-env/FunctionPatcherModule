@@ -29,6 +29,11 @@ std::optional<std::shared_ptr<PatchedFunctionData>> PatchedFunctionData::make_sh
 
     ptr->jumpToOriginal = (uint32_t *) MEMAllocFromExpHeapEx(ptr->heapHandle, 0x5 * sizeof(uint32_t), 4);
 
+    if (!ptr->jumpToOriginal) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to alloc jump data");
+        return {};
+    }
+
     if (ptr->replacementFunctionAddress > 0x01FFFFFC || ptr->targetProcess != FP_TARGET_PROCESS_ALL) {
         ptr->jumpDataSize = 15; // We could predict the actual size and save some memory, but at the moment we don't need it.
         ptr->jumpData     = (uint32_t *) MEMAllocFromExpHeapEx(ptr->heapHandle, ptr->jumpDataSize * sizeof(uint32_t), 4);
@@ -37,11 +42,6 @@ std::optional<std::shared_ptr<PatchedFunctionData>> PatchedFunctionData::make_sh
             DEBUG_FUNCTION_LINE_ERR("Failed to alloc jump data");
             return {};
         }
-    }
-
-    if (!ptr->jumpToOriginal) {
-        DEBUG_FUNCTION_LINE_ERR("Failed to alloc jump data");
-        return {};
     }
 
     return ptr;
