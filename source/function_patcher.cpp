@@ -49,7 +49,7 @@ bool PatchFunction(std::shared_ptr<PatchedFunctionData> &patchedFunction) {
 
     if (!ReadFromPhysicalAddress(patchedFunction->realPhysicalFunctionAddress, &patchedFunction->replacedInstruction)) {
         DEBUG_FUNCTION_LINE_ERR("Failed to read instruction.");
-        OSFatal("Failed to read instruction.");
+        OSFatal("FunctionPatcherModule: Failed to read instruction.");
         return false;
     }
 
@@ -108,7 +108,7 @@ bool RestoreFunction(std::shared_ptr<PatchedFunctionData> &patchedFunction) {
     }
 
     if (sourceAddrPhys == 0) {
-        OSFatal("Failed to get physical address");
+        OSFatal("FunctionPatcherModule: Failed to get physical address");
     }
 
     KernelCopyData(targetAddrPhys, sourceAddrPhys, 4);

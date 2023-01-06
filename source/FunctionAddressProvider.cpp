@@ -11,7 +11,7 @@ uint32_t FunctionAddressProvider::getEffectiveAddressOfFunction(function_replace
     for (auto &rplHandle : rpl_handles) {
         if (rplHandle.library == library) {
             if (rplHandle.handle == nullptr) {
-                DEBUG_FUNCTION_LINE_VERBOSE("Lets acquire handle for rpl: %s", rplHandle.rplname);
+                DEBUG_FUNCTION_LINE_VERBOSE("Lets check if rpl is loaded: %s", rplHandle.rplname);
                 err = OSDynLoad_IsModuleLoaded((char *) rplHandle.rplname, &rplHandle.handle);
             }
             if (err != OS_DYNLOAD_OK || !rplHandle.handle) {

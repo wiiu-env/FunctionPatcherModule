@@ -19,18 +19,17 @@ void UpdateFunctionPointer() {
     OSDynLoad_Module coreinitModule;
     if (OSDynLoad_Acquire("coreinit", &coreinitModule) != OS_DYNLOAD_OK) {
         DEBUG_FUNCTION_LINE_ERR("Failed to acquire coreinit.rpl");
-        OSFatal("Failed to acquire coreinit.rpl");
+        OSFatal("FunctionPatcherModule: Failed to acquire coreinit.rpl");
     }
     /* Memory allocation functions */
     uint32_t *allocPtr, *freePtr;
-    /* Memory allocation functions */
     if (OSDynLoad_FindExport(coreinitModule, true, "MEMAllocFromDefaultHeapEx", reinterpret_cast<void **>(&allocPtr)) != OS_DYNLOAD_OK) {
         DEBUG_FUNCTION_LINE_ERR("OSDynLoad_FindExport for MEMAllocFromDefaultHeapEx");
-        OSFatal("OSDynLoad_FindExport for MEMAllocFromDefaultHeapEx");
+        OSFatal("FunctionPatcherModule: OSDynLoad_FindExport for MEMAllocFromDefaultHeapEx");
     }
     if (OSDynLoad_FindExport(coreinitModule, true, "MEMFreeToDefaultHeap", reinterpret_cast<void **>(&freePtr)) != OS_DYNLOAD_OK) {
         DEBUG_FUNCTION_LINE_ERR("OSDynLoad_FindExport for MEMFreeToDefaultHeap");
-        OSFatal("OSDynLoad_FindExport for MEMFreeToDefaultHeap");
+        OSFatal("FunctionPatcherModule: OSDynLoad_FindExport for MEMFreeToDefaultHeap");
     }
 
     gMEMAllocFromDefaultHeapExForThreads = (void *(*) (uint32_t, int) ) * allocPtr;
@@ -77,13 +76,13 @@ WUMS_INITIALIZE() {
     gJumpHeapHandle = MEMCreateExpHeapEx((void *) (gJumpHeapData), JUMP_HEAP_DATA_SIZE, 1);
     if (gJumpHeapHandle == nullptr) {
         DEBUG_FUNCTION_LINE_ERR("Failed to create heap for jump data");
-        OSFatal("Failed to create heap for jump data");
+        OSFatal("FunctionPatcherModule: Failed to create heap for jump data");
     }
 
     gFunctionAddressProvider = make_shared_nothrow<FunctionAddressProvider>();
     if (!gFunctionAddressProvider) {
         DEBUG_FUNCTION_LINE_ERR("Failed to create gFunctionAddressProvider");
-        OSFatal("Failed to create gFunctionAddressProvider");
+        OSFatal("FunctionPatcherModule: Failed to create gFunctionAddressProvider");
     }
 }
 
