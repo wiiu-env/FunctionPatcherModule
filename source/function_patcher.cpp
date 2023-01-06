@@ -38,7 +38,7 @@ bool PatchFunction(std::shared_ptr<PatchedFunctionData> &patchedFunction) {
 
     // The addresses of a function might change every time with run another application.
     if (!patchedFunction->updateFunctionAddresses()) {
-        return true;
+        return false;
     }
 
     if (patchedFunction->functionName) {

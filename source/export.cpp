@@ -4,40 +4,53 @@
 #include "utils/globals.h"
 #include <ranges>
 #include <vector>
+#include <wums/exports.h>
 
-bool FunctionPatcherPatchFunction(function_replacement_data_t *function_data, PatchedFunctionHandle *outHandle) {
+FunctionPatcherStatus FPAddFunctionPatch(function_replacement_data_t *function_data, PatchedFunctionHandle *outHandle, bool *outHasBeenPatched) {
+    if (function_data == nullptr) {
+        DEBUG_FUNCTION_LINE_ERR("function_data was NULL");
+        return FUNCTION_PATCHER_RESULT_INVALID_ARGUMENT;
+    }
     if (function_data->VERSION != FUNCTION_REPLACEMENT_DATA_STRUCT_VERSION) {
         DEBUG_FUNCTION_LINE_ERR("Failed to patch function. struct version mismatch");
-        return false;
+        return FUNCTION_PATCHER_RESULT_UNSUPPORTED_STRUCT_VERSION;
     }
 
     auto functionDataOpt = PatchedFunctionData::make_shared(gFunctionAddressProvider, function_data, gJumpHeapHandle);
 
     if (!functionDataOpt) {
-        return false;
+        return FUNCTION_PATCHER_RESULT_UNKNOWN_ERROR;
     }
 
-    auto functionData = functionDataOpt.value();
+    auto &functionData = functionDataOpt.value();
 
-    std::lock_guard<std::mutex> lock(gPatchedFunctionsMutex);
-
-    if (!PatchFunction(functionData)) {
-        DEBUG_FUNCTION_LINE_ERR("Failed to patch function");
-        return false;
+    // PatchFunction calls OSFatal on fatal errors.
+    // If this function returns false the target function was not patched
+    // Usually this means the target RPL is not (yet) loaded.
+    auto patchResult = PatchFunction(functionData);
+    if (outHasBeenPatched) {
+        *outHasBeenPatched = patchResult;
     }
 
     if (outHandle) {
         *outHandle = functionData->getHandle();
     }
 
-    gPatchedFunctions.push_back(std::move(functionData));
+    {
+        std::lock_guard<std::mutex> lock(gPatchedFunctionsMutex);
+        gPatchedFunctions.push_back(std::move(functionData));
 
-    OSMemoryBarrier();
+        OSMemoryBarrier();
+    }
 
-    return true;
+    return FUNCTION_PATCHER_RESULT_SUCCESS;
 }
 
-bool FunctionPatcherRestoreFunction(PatchedFunctionHandle handle) {
+bool FunctionPatcherPatchFunction(function_replacement_data_t *function_data, PatchedFunctionHandle *outHandle) {
+    return FPAddFunctionPatch(function_data, outHandle, nullptr) == FUNCTION_PATCHER_RESULT_SUCCESS;
+}
+
+FunctionPatcherStatus FPRemoveFunctionPatch(PatchedFunctionHandle handle) {
     std::lock_guard<std::mutex> lock(gPatchedFunctionsMutex);
     std::vector<std::shared_ptr<PatchedFunctionData>> toBeTempRestored;
     bool found            = false;
@@ -60,7 +73,7 @@ bool FunctionPatcherRestoreFunction(PatchedFunctionHandle handle) {
     }
     if (!found) {
         DEBUG_FUNCTION_LINE_ERR("Failed to find PatchedFunctionData by handle %08X", handle);
-        return false;
+        return FUNCTION_PATCHER_RESULT_PATCH_NOT_FOUND;
     }
 
     // Restore function patches that were done after the patch we actually want to restore.
@@ -79,5 +92,36 @@ bool FunctionPatcherRestoreFunction(PatchedFunctionHandle handle) {
     }
 
     OSMemoryBarrier();
-    return true;
+    return FUNCTION_PATCHER_RESULT_SUCCESS;
 }
+
+bool FunctionPatcherRestoreFunction(PatchedFunctionHandle handle) {
+    return FPRemoveFunctionPatch(handle) == FUNCTION_PATCHER_RESULT_SUCCESS;
+}
+
+FunctionPatcherStatus FPGetVersion(FunctionPatcherAPIVersion *outVersion) {
+    if (outVersion == nullptr) {
+        return FUNCTION_PATCHER_RESULT_INVALID_ARGUMENT;
+    }
+    *outVersion = 2;
+    return FUNCTION_PATCHER_RESULT_SUCCESS;
+}
+
+FunctionPatcherStatus FPIsFunctionPatched(PatchedFunctionHandle handle, bool *outIsFunctionPatched) {
+    if (outIsFunctionPatched == nullptr) {
+        return FUNCTION_PATCHER_RESULT_INVALID_ARGUMENT;
+    }
+    std::lock_guard<std::mutex> lock(gPatchedFunctionsMutex);
+    for (auto &cur : gPatchedFunctions) {
+        if (cur->getHandle() == handle) {
+            *outIsFunctionPatched = cur->isPatched;
+            return FUNCTION_PATCHER_RESULT_SUCCESS;
+        }
+    }
+    return FUNCTION_PATCHER_RESULT_PATCH_NOT_FOUND;
+}
+
+WUMS_EXPORT_FUNCTION(FPGetVersion);
+WUMS_EXPORT_FUNCTION(FPAddFunctionPatch);
+WUMS_EXPORT_FUNCTION(FPRemoveFunctionPatch);
+WUMS_EXPORT_FUNCTION(FPIsFunctionPatched);
