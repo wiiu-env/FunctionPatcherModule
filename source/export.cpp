@@ -55,11 +55,11 @@ FunctionPatcherStatus FPRemoveFunctionPatch(PatchedFunctionHandle handle) {
     std::vector<std::shared_ptr<PatchedFunctionData>> toBeTempRestored;
     bool found            = false;
     int32_t erasePosition = 0;
-    std::shared_ptr<PatchedFunctionData> toRemoved;
+    std::shared_ptr<PatchedFunctionData> toBeRemoved;
     for (auto &cur : gPatchedFunctions) {
         if (cur->getHandle() == handle) {
-            toRemoved = cur;
-            found     = true;
+            toBeRemoved = cur;
+            found       = true;
             if (!cur->isPatched) {
                 // Early return if the function is not patched.
                 break;
@@ -68,7 +68,7 @@ FunctionPatcherStatus FPRemoveFunctionPatch(PatchedFunctionHandle handle) {
         }
         // Check if something else patched the same function afterwards.
         if (found) {
-            if (cur->realPhysicalFunctionAddress == toRemoved->realPhysicalFunctionAddress) {
+            if (cur->realPhysicalFunctionAddress == toBeRemoved->realPhysicalFunctionAddress) {
                 toBeTempRestored.push_back(cur);
             }
         } else {
@@ -80,19 +80,19 @@ FunctionPatcherStatus FPRemoveFunctionPatch(PatchedFunctionHandle handle) {
         return FUNCTION_PATCHER_RESULT_PATCH_NOT_FOUND;
     }
 
-    if (toRemoved->isPatched) {
+    if (toBeRemoved->isPatched) {
         // Restore function patches that were done after the patch we actually want to restore.
         for (auto &cur : std::ranges::reverse_view(toBeTempRestored)) {
             RestoreFunction(cur);
         }
 
         // Restore the function we actually want to restore
-        RestoreFunction(toRemoved);
+        RestoreFunction(toBeRemoved);
     }
 
     gPatchedFunctions.erase(gPatchedFunctions.begin() + erasePosition);
 
-    if (toRemoved->isPatched) {
+    if (toBeRemoved->isPatched) {
         // Apply the other patches again
         for (auto &cur : toBeTempRestored) {
             PatchFunction(cur);
