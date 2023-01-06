@@ -54,7 +54,7 @@ bool PatchedFunctionData::updateFunctionAddresses() {
 
     if (!this->functionName) {
         DEBUG_FUNCTION_LINE_ERR("Function name was empty. This should never happen.");
-        OSFatal("function name was empty");
+        OSFatal("FunctionPatcherModule: function name was empty");
         return false;
     }
 
@@ -77,7 +77,7 @@ bool PatchedFunctionData::updateFunctionAddresses() {
 void PatchedFunctionData::generateJumpToOriginal() {
     if (!this->jumpToOriginal) {
         DEBUG_FUNCTION_LINE_ERR("this->jumpToOriginal is not allocated");
-        OSFatal("this->jumpToOriginal is not allocated");
+        OSFatal("FunctionPatcherModule: this->jumpToOriginal is not allocated");
     }
 
     uint32_t jumpToAddress = this->realEffectiveFunctionAddress + 4;
@@ -109,7 +109,7 @@ void PatchedFunctionData::generateReplacementJump() {
     if (this->replacementFunctionAddress > 0x01FFFFFC || this->targetProcess != FP_TARGET_PROCESS_ALL) {
         if (!this->jumpData) {
             DEBUG_FUNCTION_LINE_ERR("jumpData was not allocated");
-            OSFatal("jumpData was not allocated");
+            OSFatal("FunctionPatcherModule: jumpData was not allocated");
         }
         uint32_t offset = 0;
         if (this->targetProcess != FP_TARGET_PROCESS_ALL) {
@@ -150,13 +150,13 @@ void PatchedFunctionData::generateReplacementJump() {
 
         if (offset >= this->jumpDataSize) {
             DEBUG_FUNCTION_LINE_ERR("Tried to overflow buffer. offset: %08X vs array size: %08X", offset, this->jumpDataSize);
-            OSFatal("Wrote too much data");
+            OSFatal("FunctionPatcherModule: Wrote too much data");
         }
 
         // Make sure the trampoline itself is usable.
         if (((uint32_t) this->jumpData & 0x01FFFFFC) != (uint32_t) this->jumpData) {
             DEBUG_FUNCTION_LINE_ERR("Jump is impossible");
-            OSFatal("Jump is impossible");
+            OSFatal("FunctionPatcherModule: Jump is impossible");
         }
 
         this->replaceWithInstruction = 0x48000002 | ((uint32_t) this->jumpData & 0x01FFFFFC);
