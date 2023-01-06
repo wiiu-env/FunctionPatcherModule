@@ -60,6 +60,10 @@ FunctionPatcherStatus FPRemoveFunctionPatch(PatchedFunctionHandle handle) {
         if (cur->getHandle() == handle) {
             toRemoved = cur;
             found     = true;
+            if (!cur->isPatched) {
+                // Early return if the function is not patched.
+                break;
+            }
             continue;
         }
         // Check if something else patched the same function afterwards.
@@ -76,19 +80,23 @@ FunctionPatcherStatus FPRemoveFunctionPatch(PatchedFunctionHandle handle) {
         return FUNCTION_PATCHER_RESULT_PATCH_NOT_FOUND;
     }
 
-    // Restore function patches that were done after the patch we actually want to restore.
-    for (auto &cur : std::ranges::reverse_view(toBeTempRestored)) {
-        RestoreFunction(cur);
-    }
+    if (toRemoved->isPatched) {
+        // Restore function patches that were done after the patch we actually want to restore.
+        for (auto &cur : std::ranges::reverse_view(toBeTempRestored)) {
+            RestoreFunction(cur);
+        }
 
-    // Restore the function we actually want to restore
-    RestoreFunction(toRemoved);
+        // Restore the function we actually want to restore
+        RestoreFunction(toRemoved);
+    }
 
     gPatchedFunctions.erase(gPatchedFunctions.begin() + erasePosition);
 
-    // Apply the other patches again
-    for (auto &cur : toBeTempRestored) {
-        PatchFunction(cur);
+    if (toRemoved->isPatched) {
+        // Apply the other patches again
+        for (auto &cur : toBeTempRestored) {
+            PatchFunction(cur);
+        }
     }
 
     OSMemoryBarrier();
