@@ -6,13 +6,14 @@
 #include "utils/utils.h"
 #include <coreinit/memdefaultheap.h>
 #include <coreinit/memexpheap.h>
+#include <kernel/kernel.h>
 #include <ranges>
 #include <set>
 #include <wums.h>
 
 WUMS_MODULE_EXPORT_NAME("homebrew_functionpatcher");
 WUMS_MODULE_INIT_BEFORE_RELOCATION_DONE_HOOK();
-WUMS_DEPENDS_ON(homebrew_kernel); 
+WUMS_DEPENDS_ON(homebrew_kernel);
 
 void UpdateFunctionPointer() {
     // We need the real MEMAllocFromDefaultHeapEx/MEMFreeToDefaultHeap function pointer to force-allocate memory on the default heap.
@@ -70,8 +71,44 @@ void CheckIfPatchedFunctionsAreStillInMemory() {
     }
 }
 
+bool PatchInstruction(void *instr, uint32_t original, uint32_t replacement) {
+    uint32_t current = *(uint32_t *) instr;
+    if (current != original) {
+        return current == replacement;
+    }
+
+    KernelCopyData(OSEffectiveToPhysical((uint32_t) instr), OSEffectiveToPhysical((uint32_t) &replacement), sizeof(replacement));
+
+    DCFlushRange(instr, 4);
+    ICInvalidateRange(instr, 4);
+
+    current = *(uint32_t *) instr;
+
+    return true;
+}
+
+bool PatchDynLoadFunctions() {
+    uint32_t *patch1 = ((uint32_t *) &OSDynLoad_GetNumberOfRPLs) + 6;
+    uint32_t *patch2 = ((uint32_t *) &OSDynLoad_GetRPLInfo) + 22;
+
+    if (!PatchInstruction(patch1, 0x41820038 /* beq +38 */, 0x60000000 /*nop*/)) {
+        return false;
+    }
+    if (!PatchInstruction(patch2, 0x41820100 /* beq +100 */, 0x60000000 /*nop*/)) {
+        return false;
+    }
+
+    return true;
+}
+
 WUMS_INITIALIZE() {
     UpdateFunctionPointer();
+    initLogging();
+
+    if (!PatchDynLoadFunctions()) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to patch OSDynLoad_GetRPLInfo or OSDynLoad_GetNumberOfRPLs");
+        OSFatal("Failed to patch OSDynLoad_GetRPLInfo or OSDynLoad_GetNumberOfRPLs");
+    }
 
     memset(gJumpHeapData, 0, JUMP_HEAP_DATA_SIZE);
     gJumpHeapHandle = MEMCreateExpHeapEx((void *) (gJumpHeapData), JUMP_HEAP_DATA_SIZE, 1);
@@ -101,7 +138,7 @@ void notify_callback(OSDynLoad_Module module,
         auto library = gFunctionAddressProvider->getTypeForHandle(module);
         if (library != LIBRARY_OTHER) {
             for (auto &cur : gPatchedFunctions) {
-                if (cur->library == library) {
+                if (cur->type == FUNCTION_PATCHER_REPLACE_BY_LIB_OR_ADDRESS && cur->library.has_value() && cur->library == library) {
                     cur->isPatched = false;
                 }
             }

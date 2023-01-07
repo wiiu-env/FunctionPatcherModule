@@ -6,17 +6,30 @@
 #include <vector>
 #include <wums/exports.h>
 
+WUT_CHECK_OFFSET(function_replacement_data_v2_t, 0x00, VERSION);
+WUT_CHECK_OFFSET(function_replacement_data_v3_t, 0x00, version);
+
 FunctionPatcherStatus FPAddFunctionPatch(function_replacement_data_t *function_data, PatchedFunctionHandle *outHandle, bool *outHasBeenPatched) {
     if (function_data == nullptr) {
         DEBUG_FUNCTION_LINE_ERR("function_data was NULL");
         return FUNCTION_PATCHER_RESULT_INVALID_ARGUMENT;
     }
-    if (function_data->VERSION != FUNCTION_REPLACEMENT_DATA_STRUCT_VERSION) {
+
+    if (function_data->version < 2 || function_data->version > 3) {
         DEBUG_FUNCTION_LINE_ERR("Failed to patch function. struct version mismatch");
         return FUNCTION_PATCHER_RESULT_UNSUPPORTED_STRUCT_VERSION;
     }
 
-    auto functionDataOpt = PatchedFunctionData::make_shared(gFunctionAddressProvider, function_data, gJumpHeapHandle);
+    std::optional<std::shared_ptr<PatchedFunctionData>> functionDataOpt;
+    if (function_data->version == 2) {
+        functionDataOpt = PatchedFunctionData::make_shared_v2(gFunctionAddressProvider, (function_replacement_data_v2_t *) function_data, gJumpHeapHandle);
+    } else if (function_data->version == 3) {
+        functionDataOpt = PatchedFunctionData::make_shared_v3(gFunctionAddressProvider, (function_replacement_data_v3_t *) function_data, gJumpHeapHandle);
+    } else {
+        // Should never happen.
+        DEBUG_FUNCTION_LINE_ERR("Unknown function_replacement_data_t struct version");
+        OSFatal("Unknown function patching struct version. Update FunctionPatcherModule/Aroma.");
+    }
 
     if (!functionDataOpt) {
         return FUNCTION_PATCHER_RESULT_UNKNOWN_ERROR;
