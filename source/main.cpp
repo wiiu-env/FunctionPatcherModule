@@ -12,6 +12,7 @@
 
 WUMS_MODULE_EXPORT_NAME("homebrew_functionpatcher");
 WUMS_MODULE_INIT_BEFORE_RELOCATION_DONE_HOOK();
+WUMS_DEPENDS_ON(homebrew_kernel); 
 
 void UpdateFunctionPointer() {
     // We need the real MEMAllocFromDefaultHeapEx/MEMFreeToDefaultHeap function pointer to force-allocate memory on the default heap.
