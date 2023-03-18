@@ -34,4 +34,4 @@ docker run -it --rm -v ${PWD}:/project functionpatchermodule-builder make clean
 
 ## Format the code via docker
 
-`docker run --rm -v ${PWD}:/src wiiuenv/clang-format:13.0.0-2 -r ./source -i`
+`docker run --rm -v ${PWD}:/src ghcr.io/wiiu-env/clang-format:13.0.0-2 -r ./source -i`
