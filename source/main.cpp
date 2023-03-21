@@ -156,6 +156,8 @@ WUMS_APPLICATION_STARTS() {
 
     OSReport("Running FunctionPatcherModule " MODULE_VERSION_FULL "\n");
 
+    gFunctionAddressProvider->resetHandles();
+
     // Now we can update the pointer with the "real" functions
     gMEMAllocFromDefaultHeapExForThreads = MEMAllocFromDefaultHeapEx;
     gMEMFreeToDefaultHeapForThreads      = MEMFreeToDefaultHeap;
@@ -178,9 +180,7 @@ WUMS_APPLICATION_STARTS() {
 WUMS_APPLICATION_REQUESTS_EXIT() {
     deinitLogging();
 }
-WUMS_APPLICATION_ENDS() {
-    gFunctionAddressProvider->resetHandles();
-}
+
 
 WUMS_EXPORT_FUNCTION(FunctionPatcherPatchFunction);
 WUMS_EXPORT_FUNCTION(FunctionPatcherRestoreFunction);
