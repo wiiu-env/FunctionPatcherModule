@@ -28,10 +28,11 @@ public:
     typedef void (*Callback)(CThread *thread, void *arg);
 
     //! constructor
-    explicit CThread(int32_t iAttr, int32_t iPriority = 16, int32_t iStackSize = 0x8000, CThread::Callback callback = nullptr, void *callbackArg = nullptr)
+    explicit CThread(int32_t iAttr, int32_t iPriority = 16, int32_t stacksize = 0x8000, CThread::Callback callback = nullptr, void *callbackArg = nullptr)
         : pThread(nullptr), pThreadStack(nullptr), pCallback(callback), pCallbackArg(callbackArg) {
         //! save attribute assignment
         iAttributes = iAttr;
+        iStackSize = stacksize;
         //! allocate the thread on the default Cafe OS heap
         pThread = (OSThread *) gMEMAllocFromDefaultHeapExForThreads(sizeof(OSThread), 0x10);
         //! allocate the stack on the default Cafe OS heap
@@ -125,9 +126,11 @@ public:
         }
         //! free the thread stack buffer
         if (pThreadStack) {
+            memset(pThreadStack, 0, iStackSize);
             gMEMFreeToDefaultHeapForThreads(pThreadStack);
         }
         if (pThread) {
+            memset(pThread, 0, sizeof(OSThread));
             gMEMFreeToDefaultHeapForThreads(pThread);
         }
         pThread      = nullptr;
@@ -151,6 +154,7 @@ private:
         return 0;
     }
 
+    uint32_t iStackSize;
     int32_t iAttributes;
     OSThread *pThread;
     uint8_t *pThreadStack;
