@@ -5,7 +5,7 @@
 #include <memory>
 #include <vector>
 
-#define MODULE_VERSION      "v0.2"
+#define MODULE_VERSION      "v0.2.1"
 #define MODULE_VERSION_FULL MODULE_VERSION MODULE_VERSION_EXTRA
 
 #define JUMP_HEAP_DATA_SIZE (32 * 1024)
