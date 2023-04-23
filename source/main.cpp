@@ -25,11 +25,11 @@ void UpdateFunctionPointer() {
     }
     /* Memory allocation functions */
     uint32_t *allocPtr, *freePtr;
-    if (OSDynLoad_FindExport(coreinitModule, true, "MEMAllocFromDefaultHeapEx", reinterpret_cast<void **>(&allocPtr)) != OS_DYNLOAD_OK) {
+    if (OSDynLoad_FindExport(coreinitModule, OS_DYNLOAD_EXPORT_DATA, "MEMAllocFromDefaultHeapEx", reinterpret_cast<void **>(&allocPtr)) != OS_DYNLOAD_OK) {
         DEBUG_FUNCTION_LINE_ERR("OSDynLoad_FindExport for MEMAllocFromDefaultHeapEx");
         OSFatal("FunctionPatcherModule: OSDynLoad_FindExport for MEMAllocFromDefaultHeapEx");
     }
-    if (OSDynLoad_FindExport(coreinitModule, true, "MEMFreeToDefaultHeap", reinterpret_cast<void **>(&freePtr)) != OS_DYNLOAD_OK) {
+    if (OSDynLoad_FindExport(coreinitModule, OS_DYNLOAD_EXPORT_DATA, "MEMFreeToDefaultHeap", reinterpret_cast<void **>(&freePtr)) != OS_DYNLOAD_OK) {
         DEBUG_FUNCTION_LINE_ERR("OSDynLoad_FindExport for MEMFreeToDefaultHeap");
         OSFatal("FunctionPatcherModule: OSDynLoad_FindExport for MEMFreeToDefaultHeap");
     }

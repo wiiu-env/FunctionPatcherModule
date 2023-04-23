@@ -28,7 +28,7 @@ uint32_t FunctionAddressProvider::getEffectiveAddressOfFunction(function_replace
         return 0;
     }
 
-    OSDynLoad_FindExport(rpl_handle, 0, functionName, reinterpret_cast<void **>(&real_addr));
+    OSDynLoad_FindExport(rpl_handle, OS_DYNLOAD_EXPORT_FUNC, functionName, reinterpret_cast<void **>(&real_addr));
 
     if (!real_addr) {
         DEBUG_FUNCTION_LINE_VERBOSE("OSDynLoad_FindExport failed for %s", functionName);
