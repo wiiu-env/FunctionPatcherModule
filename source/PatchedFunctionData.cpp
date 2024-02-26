@@ -232,15 +232,15 @@ void PatchedFunctionData::generateJumpToOriginal() {
 
     uint32_t jumpToAddress = this->realEffectiveFunctionAddress + 4;
 
-    this->jumpToOriginal[0] = this->replacedInstruction;
-
     if (((uint32_t) jumpToAddress & 0x01FFFFFC) != (uint32_t) jumpToAddress) {
         // We need to do a long jump
-        this->jumpToOriginal[1] = 0x3d600000 | ((jumpToAddress >> 16) & 0x0000FFFF); // lis        r11 ,0x1234
-        this->jumpToOriginal[2] = 0x616b0000 | (jumpToAddress & 0x0000ffff);         // ori        r11 ,r11 ,0x5678
-        this->jumpToOriginal[3] = 0x7d6903a6;                                        // mtspr      CTR ,r11
-        this->jumpToOriginal[4] = 0x4e800420;                                        // bctr
+        this->jumpToOriginal[0] = 0x3d600000 | ((jumpToAddress >> 16) & 0x0000FFFF); // lis        r11 ,0x1234
+        this->jumpToOriginal[1] = 0x616b0000 | (jumpToAddress & 0x0000ffff);         // ori        r11 ,r11 ,0x5678
+        this->jumpToOriginal[2] = 0x7d6903a6;                                        // mtspr      CTR ,r11
+        this->jumpToOriginal[3] = this->replacedInstruction;
+        this->jumpToOriginal[4] = 0x4e800420; // bctr
     } else {
+        this->jumpToOriginal[0] = this->replacedInstruction;
         this->jumpToOriginal[1] = 0x48000002 | (jumpToAddress & 0x01FFFFFC);
     }
 
