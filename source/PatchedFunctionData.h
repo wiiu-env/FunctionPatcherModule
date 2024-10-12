@@ -2,6 +2,7 @@
 
 #include "FunctionAddressProvider.h"
 #include "PatchedFunctionData.h"
+#include "fpatching_defines_legacy.h"
 #include "utils/logger.h"
 #include <coreinit/cache.h>
 #include <coreinit/debug.h>
