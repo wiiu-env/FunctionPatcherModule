@@ -2,8 +2,8 @@
 
 /* Types that are kept only for ABI compatibility. */
 
-#include <stdint.h>
 #include <function_patcher/fpatching_defines.h>
+#include <stdint.h>
 
 typedef struct function_replacement_data_v2_t {
     uint32_t VERSION;
