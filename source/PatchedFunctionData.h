@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fpatching_defines_legacy.h"
 #include "FunctionAddressProvider.h"
 #include "PatchedFunctionData.h"
 #include "utils/logger.h"
