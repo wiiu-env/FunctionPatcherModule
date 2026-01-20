@@ -15,7 +15,7 @@ uint32_t FunctionAddressProvider::getEffectiveAddressOfFunction(function_replace
                 err = OSDynLoad_IsModuleLoaded((char *) rplHandle.rplname, &rplHandle.handle);
             }
             if (err != OS_DYNLOAD_OK || !rplHandle.handle) {
-                DEBUG_FUNCTION_LINE_VERBOSE("%s is not loaded yet", rplHandle.rplname, err, rplHandle.handle);
+                DEBUG_FUNCTION_LINE_VERBOSE("%s is not loaded yet. Err %d for handle %p", rplHandle.rplname, err, rplHandle.handle);
                 return 0;
             }
             rpl_handle = rplHandle.handle;

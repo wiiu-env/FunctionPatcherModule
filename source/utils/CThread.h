@@ -151,6 +151,7 @@ public:
 
 private:
     static int32_t threadCallback(int32_t argc, void *arg) {
+        (void) argc;
         //! After call to start() continue with the internal function
         ((CThread *) arg)->executeThread();
         return 0;
