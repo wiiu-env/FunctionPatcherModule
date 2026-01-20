@@ -21,6 +21,19 @@ static void writeDataAndFlushIC(CThread *thread, void *arg) {
 
     auto replace_instruction_physical = (uint32_t) &replace_instruction;
 
+    if (data->jumpData) {
+        DCFlushRange(data->jumpData, data->jumpDataSize * sizeof(uint32_t));
+        ICInvalidateRange(data->jumpData, data->jumpDataSize * sizeof(uint32_t));
+    }
+    if (data->jumpToOriginal) {
+        DCFlushRange(data->jumpToOriginal, 5 * sizeof(uint32_t));
+        ICInvalidateRange(data->jumpToOriginal, 5 * sizeof(uint32_t));
+    }
+    if (data->realCallFunctionAddressPtr) {
+        DCFlushRange(data->realCallFunctionAddressPtr, sizeof(uint32_t));
+        ICInvalidateRange(data->realCallFunctionAddressPtr, sizeof(uint32_t));
+    }
+
     if (replace_instruction_physical < 0x00800000 || replace_instruction_physical >= 0x01000000) {
         replace_instruction_physical = OSEffectiveToPhysical(replace_instruction_physical);
     } else {
