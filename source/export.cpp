@@ -2,8 +2,11 @@
 #include "PatchedFunctionData.h"
 #include "function_patcher.h"
 #include "utils/globals.h"
+
+#include <mutex>
 #include <ranges>
 #include <vector>
+
 #include <wums/exports.h>
 
 WUT_CHECK_OFFSET(function_replacement_data_v2_t, 0x00, VERSION);
@@ -50,7 +53,7 @@ FunctionPatcherStatus FPAddFunctionPatch(function_replacement_data_t *function_d
     }
 
     {
-        std::lock_guard<std::mutex> lock(gPatchedFunctionsMutex);
+        std::lock_guard lock(gPatchedFunctionsMutex);
         gPatchedFunctions.push_back(std::move(functionData));
 
         OSMemoryBarrier();
@@ -64,7 +67,7 @@ bool FunctionPatcherPatchFunction(function_replacement_data_t *function_data, Pa
 }
 
 FunctionPatcherStatus FPRemoveFunctionPatch(PatchedFunctionHandle handle) {
-    std::lock_guard<std::mutex> lock(gPatchedFunctionsMutex);
+    std::lock_guard lock(gPatchedFunctionsMutex);
     std::vector<std::shared_ptr<PatchedFunctionData>> toBeTempRestored;
     bool found            = false;
     int32_t erasePosition = 0;
@@ -132,7 +135,7 @@ FunctionPatcherStatus FPIsFunctionPatched(PatchedFunctionHandle handle, bool *ou
     if (outIsFunctionPatched == nullptr) {
         return FUNCTION_PATCHER_RESULT_INVALID_ARGUMENT;
     }
-    std::lock_guard<std::mutex> lock(gPatchedFunctionsMutex);
+    std::lock_guard lock(gPatchedFunctionsMutex);
     for (auto &cur : gPatchedFunctions) {
         if (cur->getHandle() == handle) {
             *outIsFunctionPatched = cur->isPatched;
