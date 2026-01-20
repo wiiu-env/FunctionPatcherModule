@@ -4,9 +4,11 @@
 #include "utils/globals.h"
 #include "utils/logger.h"
 #include "utils/utils.h"
+
 #include <coreinit/memdefaultheap.h>
 #include <coreinit/memexpheap.h>
 #include <kernel/kernel.h>
+#include <mutex>
 #include <ranges>
 #include <set>
 #include <wums.h>
@@ -41,7 +43,7 @@ void UpdateFunctionPointer() {
 }
 
 void CheckIfPatchedFunctionsAreStillInMemory() {
-    std::lock_guard<std::mutex> lock(gPatchedFunctionsMutex);
+    std::lock_guard lock(gPatchedFunctionsMutex);
     // Check if rpl has been unloaded by comparing the instruction.
     std::set<uint32_t> physicalAddressesUnchanged;
     std::set<uint32_t> physicalAddressesChanged;
@@ -129,12 +131,12 @@ void notify_callback(OSDynLoad_Module module,
                      OSDynLoad_NotifyReason reason,
                      OSDynLoad_NotifyData *infos) {
     if (reason == OS_DYNLOAD_NOTIFY_LOADED) {
-        std::lock_guard<std::mutex> lock(gPatchedFunctionsMutex);
+        std::lock_guard lock(gPatchedFunctionsMutex);
         for (auto &cur : gPatchedFunctions) {
             PatchFunction(cur);
         }
     } else if (reason == OS_DYNLOAD_NOTIFY_UNLOADED) {
-        std::lock_guard<std::mutex> lock(gPatchedFunctionsMutex);
+        std::lock_guard lock(gPatchedFunctionsMutex);
         auto library = gFunctionAddressProvider->getTypeForHandle(module);
         if (library != LIBRARY_OTHER) {
             for (auto &cur : gPatchedFunctions) {
@@ -162,7 +164,7 @@ WUMS_APPLICATION_STARTS() {
 
     initLogging();
     {
-        std::lock_guard<std::mutex> lock(gPatchedFunctionsMutex);
+        std::lock_guard lock(gPatchedFunctionsMutex);
         // reset function patch status if the rpl they were patching has been unloaded from memory.
         CheckIfPatchedFunctionsAreStillInMemory();
         DEBUG_FUNCTION_LINE_VERBOSE("Patch all functions");

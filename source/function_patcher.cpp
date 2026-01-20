@@ -4,11 +4,15 @@
 #include "utils/CThread.h"
 #include "utils/logger.h"
 #include "utils/utils.h"
+
 #include <coreinit/cache.h>
 #include <coreinit/debug.h>
 #include <coreinit/memorymap.h>
+
 #include <kernel/kernel.h>
+
 #include <memory>
+#include <mutex>
 
 static void writeDataAndFlushIC(CThread *thread, void *arg) {
     auto *data = (PatchedFunctionData *) arg;
