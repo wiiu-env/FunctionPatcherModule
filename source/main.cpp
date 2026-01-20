@@ -130,6 +130,8 @@ void notify_callback(OSDynLoad_Module module,
                      void *userContext,
                      OSDynLoad_NotifyReason reason,
                      OSDynLoad_NotifyData *infos) {
+    (void) userContext;
+    (void) infos;
     if (reason == OS_DYNLOAD_NOTIFY_LOADED) {
         std::lock_guard lock(gPatchedFunctionsMutex);
         for (auto &cur : gPatchedFunctions) {
