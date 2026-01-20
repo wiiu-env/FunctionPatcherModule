@@ -15,6 +15,7 @@
 #include <mutex>
 
 static void writeDataAndFlushIC(CThread *thread, void *arg) {
+    (void) thread;
     auto *data = (PatchedFunctionData *) arg;
 
     uint32_t replace_instruction = data->replaceWithInstruction;
