@@ -113,7 +113,7 @@ WUMS_INITIALIZE() {
     }
 
     memset(gJumpHeapData, 0, JUMP_HEAP_DATA_SIZE);
-    gJumpHeapHandle = MEMCreateExpHeapEx((void *) (gJumpHeapData), JUMP_HEAP_DATA_SIZE, 1);
+    gJumpHeapHandle = MEMCreateExpHeapEx((void *) (gJumpHeapData), JUMP_HEAP_DATA_SIZE, MEM_HEAP_FLAG_USE_LOCK);
     if (gJumpHeapHandle == nullptr) {
         DEBUG_FUNCTION_LINE_ERR("Failed to create heap for jump data");
         OSFatal("FunctionPatcherModule: Failed to create heap for jump data");
