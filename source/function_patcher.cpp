@@ -5,93 +5,255 @@
 #include "utils/logger.h"
 #include "utils/utils.h"
 
+#include <coreinit/atomic.h>
 #include <coreinit/cache.h>
+#include <coreinit/core.h>
 #include <coreinit/debug.h>
 #include <coreinit/memorymap.h>
+#include <coreinit/spinlock.h>
 
 #include <kernel/kernel.h>
 
 #include <memory>
 #include <mutex>
+#include <vector>
 
-static void writeDataAndFlushIC(CThread *thread, void *arg) {
+enum class PatchState {
+    PREPARE,
+    MAIN_CORE_PATCHING_DONE,
+    ALL_CORES_PATCHING_DONE
+};
+static volatile PatchState gPatchState = PatchState::PREPARE;
+static volatile int32_t gCoresReady    = 0;
+static volatile int32_t gCoresFlushed  = 0;
+
+static std::recursive_mutex sPatch_RestoreMutex;
+static OSSpinLock sGlobalSpinLock;
+static bool sSpinLockInitialized = false;
+
+struct WorkerTask {
+    uint32_t targetPhys;
+    uint32_t sourcePhys;
+    uint32_t effectiveAddr;
+    void *jumpData;
+    uint32_t jumpDataSize;
+    void *jumpToOriginal;
+    void *realCallFunctionAddressPtr;
+};
+
+static void applyKernelPatchOnCore(CThread *thread, void *arg) {
     (void) thread;
-    auto *data = (PatchedFunctionData *) arg;
+    auto *tasks = (std::vector<WorkerTask> *) arg;
 
-    uint32_t replace_instruction = data->replaceWithInstruction;
-    uint32_t physical_address    = data->realPhysicalFunctionAddress;
-    uint32_t effective_address   = data->realEffectiveFunctionAddress;
-    DCFlushRange(&replace_instruction, 4);
-    DCFlushRange(&physical_address, 4);
+    OSSpinLock localLock;
+    OSInitSpinLock(&localLock);
+    OSUninterruptibleSpinLock_Acquire(&localLock);
 
-    auto replace_instruction_physical = (uint32_t) &replace_instruction;
+    OSAddAtomic(&gCoresReady, 1);
 
-    if (data->jumpData) {
-        DCFlushRange(data->jumpData, data->jumpDataSize * sizeof(uint32_t));
-        ICInvalidateRange(data->jumpData, data->jumpDataSize * sizeof(uint32_t));
-    }
-    if (data->jumpToOriginal) {
-        DCFlushRange(data->jumpToOriginal, 5 * sizeof(uint32_t));
-        ICInvalidateRange(data->jumpToOriginal, 5 * sizeof(uint32_t));
-    }
-    if (data->realCallFunctionAddressPtr) {
-        DCFlushRange(data->realCallFunctionAddressPtr, sizeof(uint32_t));
-        ICInvalidateRange(data->realCallFunctionAddressPtr, sizeof(uint32_t));
+    // Wait for the main core to finish preparing physical addresses
+    while (gPatchState == PatchState::PREPARE) {
+        asm volatile("nop");
     }
 
-    if (replace_instruction_physical < 0x00800000 || replace_instruction_physical >= 0x01000000) {
-        replace_instruction_physical = OSEffectiveToPhysical(replace_instruction_physical);
-    } else {
-        replace_instruction_physical = replace_instruction_physical + 0x30800000 - 0x00800000;
+    for (const auto &task : *tasks) {
+        KernelCopyData(task.targetPhys, task.sourcePhys, 4);
     }
 
-    KernelCopyData(physical_address, replace_instruction_physical, 4);
-    ICInvalidateRange((void *) (effective_address), 4);
+    for (const auto &task : *tasks) {
+        if (task.jumpData) {
+            ICInvalidateRange(task.jumpData, task.jumpDataSize * sizeof(uint32_t));
+        }
+        if (task.jumpToOriginal) {
+            ICInvalidateRange(task.jumpToOriginal, 5 * sizeof(uint32_t));
+        }
+        if (task.realCallFunctionAddressPtr) {
+            ICInvalidateRange(task.realCallFunctionAddressPtr, sizeof(uint32_t));
+        }
+        if (task.effectiveAddr) {
+            ICInvalidateRange((void *) task.effectiveAddr, 4);
+        }
+    }
+
+    // Force pipeline flush
+    asm volatile("sync; isync");
+
+    // Atomically signal main core that our caches are clean
+    OSAddAtomic(&gCoresFlushed, 1);
+
+    // Wait for the release signal
+    while (gPatchState == PatchState::ALL_CORES_PATCHING_DONE) {}
+
+    // RESTORE INTERRUPTS
+    OSUninterruptibleSpinLock_Release(&localLock);
 }
 
-bool PatchFunction(std::shared_ptr<PatchedFunctionData> &patchedFunction) {
-    if (patchedFunction->isPatched) {
+struct PatchDispatchCtx {
+    std::shared_ptr<PatchedFunctionData> func;
+    bool result;
+};
+
+struct BatchPatchDispatchCtx {
+    std::vector<std::shared_ptr<PatchedFunctionData>> *list;
+    bool result;
+};
+
+static void PatchFunctionsBatchDispatcher(CThread *thread, void *arg) {
+    (void) thread;
+    auto *ctx   = (BatchPatchDispatchCtx *) arg;
+    ctx->result = PatchFunctions(*(ctx->list));
+}
+
+static void RestoreFunctionDispatcher(CThread *thread, void *arg) {
+    (void) thread;
+    auto *ctx   = (PatchDispatchCtx *) arg;
+    ctx->result = RestoreFunction(ctx->func);
+}
+
+bool PatchFunctions(std::vector<std::shared_ptr<PatchedFunctionData>> &patchedFunctions) {
+    if (OSGetCoreId() != OSGetMainCoreId()) {
+        DEBUG_FUNCTION_LINE_INFO("PatchFunctions called from Core %d. Dispatching to Main Core %d...", OSGetCoreId(), OSGetMainCoreId());
+        BatchPatchDispatchCtx ctx = {&patchedFunctions, false};
+        {
+            CThread thread(CThread::eAttributeAffCore1, OSGetCurrentThread()->priority, 0x1000, PatchFunctionsBatchDispatcher, &ctx);
+            thread.resumeThread();
+        }
+        return ctx.result;
+    }
+    std::lock_guard lock(sPatch_RestoreMutex);
+
+    gPatchState   = PatchState::PREPARE;
+    gCoresReady   = 0;
+    gCoresFlushed = 0;
+
+    std::vector<std::shared_ptr<PatchedFunctionData>> validToPatch;
+    validToPatch.reserve(patchedFunctions.size());
+
+    for (auto &patch : patchedFunctions) {
+        if (patch->isPatched) { continue; }
+        if (!patch->shouldBePatched()) { continue; }
+        if (!patch->updateFunctionAddresses()) { continue; }
+
+        if (!ReadFromPhysicalAddress(patch->realPhysicalFunctionAddress, &patch->replacedInstruction)) {
+            DEBUG_FUNCTION_LINE_ERR("Failed to read instruction for %s", patch->functionName.value_or("").c_str());
+            continue;
+        }
+
+        patch->generateJumpToOriginal();
+        patch->generateReplacementJump();
+        validToPatch.push_back(patch);
+    }
+
+    if (validToPatch.empty()) {
         return true;
     }
 
-    if (!patchedFunction->shouldBePatched()) {
-        return false;
+
+    // This is very important. Otherwise the heap meta data might not up to date on all cores
+    DCFlushRange(gJumpHeapData, JUMP_HEAP_DATA_SIZE);
+    ICInvalidateRange(gJumpHeapData, JUMP_HEAP_DATA_SIZE);
+
+    std::vector<WorkerTask> tasks;
+    tasks.reserve(validToPatch.size());
+
+    for (auto &pf : validToPatch) {
+        WorkerTask task                 = {};
+        task.targetPhys                 = pf->realPhysicalFunctionAddress;
+        task.effectiveAddr              = pf->realEffectiveFunctionAddress;
+        task.jumpData                   = pf->jumpData;
+        task.jumpDataSize               = pf->jumpDataSize;
+        task.jumpToOriginal             = pf->jumpToOriginal;
+        task.realCallFunctionAddressPtr = pf->realCallFunctionAddressPtr;
+
+        uint32_t replace_ptr = (uint32_t) &pf->replaceWithInstruction;
+        if (replace_ptr < 0x00800000 || replace_ptr >= 0x01000000) {
+            task.sourcePhys = OSEffectiveToPhysical(replace_ptr);
+        } else {
+            task.sourcePhys = replace_ptr + 0x30800000 - 0x00800000;
+        }
+        tasks.push_back(task);
     }
 
-    // The addresses of a function might change every time with run another application.
-    if (!patchedFunction->updateFunctionAddresses()) {
-        return false;
+    if (!sSpinLockInitialized) {
+        OSInitSpinLock(&sGlobalSpinLock);
+        sSpinLockInitialized = true;
     }
 
-    if (patchedFunction->functionName) {
-        DEBUG_FUNCTION_LINE("Patching function %s...", patchedFunction->functionName->c_str());
-    } else {
-        DEBUG_FUNCTION_LINE("Patching function @ %08X", patchedFunction->realEffectiveFunctionAddress);
+
+    CThread *threadA = CThread::create(applyKernelPatchOnCore, &tasks, CThread::eAttributeAffCore2, 0);
+    CThread *threadB = CThread::create(applyKernelPatchOnCore, &tasks, CThread::eAttributeAffCore0, 0);
+    threadA->resumeThread();
+    threadB->resumeThread();
+
+    while (gCoresReady < 2) {
+        OSSleepTicks(1);
     }
 
-    if (!ReadFromPhysicalAddress(patchedFunction->realPhysicalFunctionAddress, &patchedFunction->replacedInstruction)) {
-        DEBUG_FUNCTION_LINE_ERR("Failed to read instruction.");
-        OSFatal("FunctionPatcherModule: Failed to read instruction.");
-        return false;
+    DEBUG_FUNCTION_LINE_VERBOSE("Applying %d patches on Core %d", validToPatch.size(), OSGetCoreId());
+
+    OSUninterruptibleSpinLock_Acquire(&sGlobalSpinLock);
+
+    // D-Cache flush and Kernel Copy for all tasks
+    for (size_t i = 0; i < validToPatch.size(); ++i) {
+        auto &pf   = validToPatch[i];
+        auto &task = tasks[i];
+
+        uint32_t replace_ptr = (uint32_t) &pf->replaceWithInstruction;
+        DCFlushRange((void *) replace_ptr, 4);
+
+        if (pf->jumpData) DCFlushRange(pf->jumpData, pf->jumpDataSize * sizeof(uint32_t));
+        if (pf->jumpToOriginal) DCFlushRange(pf->jumpToOriginal, 5 * sizeof(uint32_t));
+        if (pf->realCallFunctionAddressPtr) DCFlushRange(pf->realCallFunctionAddressPtr, sizeof(uint32_t));
+
+        KernelCopyData(task.targetPhys, task.sourcePhys, 4);
     }
 
-    // Generate a jump to the original function so the unpatched function can still be called
-    patchedFunction->generateJumpToOriginal();
+    DCFlushRange(tasks.data(), sizeof(WorkerTask) * tasks.size());
+    DCFlushRange(&tasks, sizeof(tasks));
+    OSMemoryBarrier();
 
-    // Generate a code that is run when somebody calls the patched function.
-    // If the correct process calls this, it'll jump the function replacement, otherwise the original function will be called.
-    patchedFunction->generateReplacementJump();
+    // Release remote cores
+    gPatchState = PatchState::MAIN_CORE_PATCHING_DONE;
 
-    // Write this->replaceWithInstruction to the first instruction of the function we want to replace.
-    CThread::runOnAllCores(writeDataAndFlushIC, patchedFunction.get());
+    // Invalidate Main Core I-Caches
+    for (auto &task : tasks) {
+        if (task.jumpData) { ICInvalidateRange(task.jumpData, task.jumpDataSize * sizeof(uint32_t)); }
+        if (task.jumpToOriginal) { ICInvalidateRange(task.jumpToOriginal, 5 * sizeof(uint32_t)); }
+        if (task.realCallFunctionAddressPtr) { ICInvalidateRange(task.realCallFunctionAddressPtr, sizeof(uint32_t)); }
+        ICInvalidateRange((void *) task.effectiveAddr, 4);
+    }
+    asm volatile("sync; isync");
 
-    // Set patch status
-    patchedFunction->isPatched = true;
+    while (gCoresFlushed < 2) { asm volatile("nop"); }
+
+    OSUninterruptibleSpinLock_Release(&sGlobalSpinLock);
+    gPatchState = PatchState::ALL_CORES_PATCHING_DONE;
+
+    delete threadA;
+    delete threadB;
+
+    for (auto &pf : validToPatch) {
+        pf->isPatched = true;
+    }
 
     return true;
 }
 
+// Single Patch function simply wraps the Batch function
+bool PatchFunction(std::shared_ptr<PatchedFunctionData> &patchedFunction) {
+    std::vector list = {patchedFunction};
+    return PatchFunctions(list);
+}
+
 bool RestoreFunction(std::shared_ptr<PatchedFunctionData> &patchedFunction) {
+    if (OSGetCoreId() != OSGetMainCoreId()) {
+        DEBUG_FUNCTION_LINE_INFO("RestoreFunction called from Core %d. Dispatching to Main Core %d...", OSGetCoreId(), OSGetMainCoreId());
+        PatchDispatchCtx ctx    = {patchedFunction, false};
+        CThread *dispatchThread = CThread::create(RestoreFunctionDispatcher, &ctx, CThread::eAttributeAffCore1, 0);
+        delete dispatchThread;
+        return ctx.result;
+    }
+
     if (!patchedFunction->isPatched) {
         DEBUG_FUNCTION_LINE_VERBOSE("Skip restoring function because it's not patched");
         return true;
@@ -100,6 +262,8 @@ bool RestoreFunction(std::shared_ptr<PatchedFunctionData> &patchedFunction) {
         DEBUG_FUNCTION_LINE_ERR("Failed to restore function, information is missing.");
         return false;
     }
+
+    std::lock_guard lock(sPatch_RestoreMutex);
 
     auto targetAddrPhys = (uint32_t) patchedFunction->realPhysicalFunctionAddress;
 
@@ -133,9 +297,58 @@ bool RestoreFunction(std::shared_ptr<PatchedFunctionData> &patchedFunction) {
         OSFatal("FunctionPatcherModule: Failed to get physical address");
     }
 
-    KernelCopyData(targetAddrPhys, sourceAddrPhys, 4);
-    ICInvalidateRange((void *) patchedFunction->realEffectiveFunctionAddress, 4);
-    DCFlushRange((void *) patchedFunction->realEffectiveFunctionAddress, 4);
+    // Map Restore into the exact same Task structure for the generic worker
+    std::vector<WorkerTask> tasks;
+    WorkerTask task    = {};
+    task.targetPhys    = targetAddrPhys;
+    task.sourcePhys    = sourceAddrPhys;
+    task.effectiveAddr = patchedFunction->realEffectiveFunctionAddress;
+    tasks.push_back(task);
+
+    DCFlushRange(tasks.data(), sizeof(task) * tasks.size());
+    DCFlushRange(&tasks, sizeof(tasks));
+    OSMemoryBarrier();
+
+    if (!sSpinLockInitialized) {
+        OSInitSpinLock(&sGlobalSpinLock);
+        sSpinLockInitialized = true;
+    }
+
+    gPatchState   = PatchState::PREPARE;
+    gCoresReady   = 0;
+    gCoresFlushed = 0;
+
+    CThread *threadA = CThread::create(applyKernelPatchOnCore, &tasks, CThread::eAttributeAffCore2, 0, 0x1000);
+    CThread *threadB = CThread::create(applyKernelPatchOnCore, &tasks, CThread::eAttributeAffCore0, 0, 0x1000);
+    threadA->resumeThread();
+    threadB->resumeThread();
+
+    while (gCoresReady < 2) {
+        OSSleepTicks(1);
+    }
+
+    DEBUG_FUNCTION_LINE_VERBOSE("Restore on thread for %08X on Core %d", patchedFunction->realPhysicalFunctionAddress, OSGetCoreId());
+
+    OSUninterruptibleSpinLock_Acquire(&sGlobalSpinLock);
+
+    DCFlushRange(tasks.data(), tasks.size() * sizeof(WorkerTask));
+    KernelCopyData(task.targetPhys, task.sourcePhys, 4);
+    OSMemoryBarrier();
+
+    DCFlushRange((void *) task.effectiveAddr, 4);
+
+    gPatchState = PatchState::MAIN_CORE_PATCHING_DONE;
+
+    ICInvalidateRange((void *) task.effectiveAddr, 4);
+    asm volatile("sync; isync");
+
+    while (gCoresFlushed < 2) { asm volatile("nop");}
+
+    OSUninterruptibleSpinLock_Release(&sGlobalSpinLock);
+    gPatchState = PatchState::ALL_CORES_PATCHING_DONE;
+
+    delete threadA;
+    delete threadB;
 
     patchedFunction->isPatched = false;
     return true;

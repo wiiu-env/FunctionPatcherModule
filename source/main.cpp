@@ -177,6 +177,8 @@ WUMS_APPLICATION_STARTS() {
         OSMemoryBarrier();
         OSDynLoad_AddNotifyCallback(notify_callback, nullptr);
     }
+
+    CheckMemExpHeapJumpData();
 }
 
 WUMS_APPLICATION_REQUESTS_EXIT() {

@@ -12,50 +12,70 @@
 WUT_CHECK_OFFSET(function_replacement_data_v2_t, 0x00, VERSION);
 WUT_CHECK_OFFSET(function_replacement_data_v3_t, 0x00, version);
 
+FunctionPatcherStatus FPAddFunctionPatches(function_replacement_data_t **function_data_array, uint32_t count, PatchedFunctionHandle *outHandles, bool *outHasBeenPatchedArray);
+
 FunctionPatcherStatus FPAddFunctionPatch(function_replacement_data_t *function_data, PatchedFunctionHandle *outHandle, bool *outHasBeenPatched) {
-    if (function_data == nullptr) {
-        DEBUG_FUNCTION_LINE_ERR("function_data was NULL");
+    // Wrap the single patch into an array of size 1 and pass it to the batcher
+    function_replacement_data_t *arr[] = {function_data};
+    return FPAddFunctionPatches(arr, 1, outHandle, outHasBeenPatched);
+}
+
+FunctionPatcherStatus FPAddFunctionPatches(function_replacement_data_t **function_data_array, uint32_t count, PatchedFunctionHandle *outHandles, bool *outHasBeenPatchedArray) {
+    if (function_data_array == nullptr || count == 0) {
+        DEBUG_FUNCTION_LINE_ERR("function_data_array was NULL or count was 0");
         return FUNCTION_PATCHER_RESULT_INVALID_ARGUMENT;
     }
 
-    if (function_data->version < 2 || function_data->version > 3) {
-        DEBUG_FUNCTION_LINE_ERR("Failed to patch function. struct version mismatch");
-        return FUNCTION_PATCHER_RESULT_UNSUPPORTED_STRUCT_VERSION;
+    DEBUG_FUNCTION_LINE_ERR("Patching %d functions", count);
+
+    std::vector<std::shared_ptr<PatchedFunctionData>> functionsToPatch;
+    functionsToPatch.reserve(count);
+
+    for (uint32_t i = 0; i < count; ++i) {
+        auto *function_data = function_data_array[i];
+        if (function_data == nullptr) {
+            DEBUG_FUNCTION_LINE_ERR("A function_data entry was NULL");
+            return FUNCTION_PATCHER_RESULT_INVALID_ARGUMENT;
+        }
+
+        if (function_data->version < 2 || function_data->version > 3) {
+            DEBUG_FUNCTION_LINE_ERR("Failed to patch function. struct version mismatch");
+            return FUNCTION_PATCHER_RESULT_UNSUPPORTED_STRUCT_VERSION;
+        }
+
+        std::optional<std::shared_ptr<PatchedFunctionData>> functionDataOpt;
+        if (function_data->version == 2) {
+            functionDataOpt = PatchedFunctionData::make_shared_v2(gFunctionAddressProvider, (function_replacement_data_v2_t *) function_data, gJumpHeapHandle);
+        } else if (function_data->version == 3) {
+            functionDataOpt = PatchedFunctionData::make_shared_v3(gFunctionAddressProvider, (function_replacement_data_v3_t *) function_data, gJumpHeapHandle);
+        } else {
+            DEBUG_FUNCTION_LINE_ERR("Unknown function_replacement_data_t struct version");
+            OSFatal("Unknown function patching struct version. Update FunctionPatcherModule/Aroma.");
+        }
+
+        if (!functionDataOpt) {
+            return FUNCTION_PATCHER_RESULT_UNKNOWN_ERROR;
+        }
+
+        functionsToPatch.push_back(functionDataOpt.value());
     }
 
-    std::optional<std::shared_ptr<PatchedFunctionData>> functionDataOpt;
-    if (function_data->version == 2) {
-        functionDataOpt = PatchedFunctionData::make_shared_v2(gFunctionAddressProvider, (function_replacement_data_v2_t *) function_data, gJumpHeapHandle);
-    } else if (function_data->version == 3) {
-        functionDataOpt = PatchedFunctionData::make_shared_v3(gFunctionAddressProvider, (function_replacement_data_v3_t *) function_data, gJumpHeapHandle);
-    } else {
-        // Should never happen.
-        DEBUG_FUNCTION_LINE_ERR("Unknown function_replacement_data_t struct version");
-        OSFatal("Unknown function patching struct version. Update FunctionPatcherModule/Aroma.");
-    }
-
-    if (!functionDataOpt) {
-        return FUNCTION_PATCHER_RESULT_UNKNOWN_ERROR;
-    }
-
-    auto &functionData = functionDataOpt.value();
-
-    // PatchFunction calls OSFatal on fatal errors.
-    // If this function returns false the target function was not patched
-    // Usually this means the target RPL is not (yet) loaded.
-    auto patchResult = PatchFunction(functionData);
-    if (outHasBeenPatched) {
-        *outHasBeenPatched = patchResult;
-    }
-
-    if (outHandle) {
-        *outHandle = functionData->getHandle();
-    }
+    PatchFunctions(functionsToPatch);
 
     {
         std::lock_guard lock(gPatchedFunctionsMutex);
-        gPatchedFunctions.push_back(std::move(functionData));
+        for (uint32_t i = 0; i < count; ++i) {
+            auto &funcData = functionsToPatch[i];
 
+            if (outHasBeenPatchedArray) {
+                outHasBeenPatchedArray[i] = funcData->isPatched;
+            }
+            if (outHandles) {
+                outHandles[i] = funcData->getHandle();
+            }
+
+            gPatchedFunctions.push_back(std::move(funcData));
+        }
         OSMemoryBarrier();
     }
 
@@ -127,7 +147,7 @@ FunctionPatcherStatus FPGetVersion(FunctionPatcherAPIVersion *outVersion) {
     if (outVersion == nullptr) {
         return FUNCTION_PATCHER_RESULT_INVALID_ARGUMENT;
     }
-    *outVersion = 2;
+    *outVersion = 3;
     return FUNCTION_PATCHER_RESULT_SUCCESS;
 }
 
@@ -147,5 +167,6 @@ FunctionPatcherStatus FPIsFunctionPatched(PatchedFunctionHandle handle, bool *ou
 
 WUMS_EXPORT_FUNCTION(FPGetVersion);
 WUMS_EXPORT_FUNCTION(FPAddFunctionPatch);
+WUMS_EXPORT_FUNCTION(FPAddFunctionPatches);
 WUMS_EXPORT_FUNCTION(FPRemoveFunctionPatch);
 WUMS_EXPORT_FUNCTION(FPIsFunctionPatched);
