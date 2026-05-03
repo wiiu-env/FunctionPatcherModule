@@ -1,5 +1,6 @@
 #include "PatchedFunctionData.h"
 #include "utils/KernelFindExport.h"
+#include "utils/globals.h"
 #include "utils/utils.h"
 #include <coreinit/mcp.h>
 #include <coreinit/title.h>
@@ -102,16 +103,14 @@ bool PatchedFunctionData::allocateDataForJumps() {
     }
     if (this->replacementFunctionAddress > 0x01FFFFFC || this->targetProcess != FP_TARGET_PROCESS_ALL) {
         this->jumpDataSize = 15; // We could predict the actual size and save some memory, but at the moment we don't need it.
-        this->jumpData     = (uint32_t *) MEMAllocFromExpHeapEx(this->heapHandle, this->jumpDataSize * sizeof(uint32_t), 4);
+        this->jumpData     = (uint32_t *) MEMAllocFromExpHeapEx(this->heapHandle, this->jumpDataSize * sizeof(uint32_t), 0x20);
 
         if (!this->jumpData) {
             DEBUG_FUNCTION_LINE_ERR("Failed to alloc jump data");
             return false;
         }
     }
-
-    this->jumpToOriginal = (uint32_t *) MEMAllocFromExpHeapEx(this->heapHandle, 0x5 * sizeof(uint32_t), 4);
-
+    this->jumpToOriginal = (uint32_t *) MEMAllocFromExpHeapEx(this->heapHandle, 0x5 * sizeof(uint32_t), 0x20);
     if (!this->jumpToOriginal) {
         DEBUG_FUNCTION_LINE_ERR("Failed to alloc jump data");
         return false;
@@ -244,10 +243,11 @@ void PatchedFunctionData::generateJumpToOriginal() {
         this->jumpToOriginal[1] = 0x48000002 | (jumpToAddress & 0x01FFFFFC);
     }
 
-    DCFlushRange((void *) this->jumpToOriginal, sizeof(uint32_t) * 5);
-    ICInvalidateRange((void *) this->jumpToOriginal, sizeof(uint32_t) * 5);
+    DCFlushRange(gJumpHeapData, JUMP_HEAP_DATA_SIZE);
+    ICInvalidateRange(gJumpHeapData, JUMP_HEAP_DATA_SIZE);
 
     *(this->realCallFunctionAddressPtr) = (uint32_t) this->jumpToOriginal;
+
     OSMemoryBarrier();
 }
 
@@ -311,8 +311,8 @@ void PatchedFunctionData::generateReplacementJump() {
 
         this->replaceWithInstruction = 0x48000002 | ((uint32_t) this->jumpData & 0x01FFFFFC);
 
-        DCFlushRange((void *) this->jumpData, sizeof(uint32_t) * 15);
-        ICInvalidateRange((void *) this->jumpData, sizeof(uint32_t) * 15);
+        DCFlushRange(gJumpHeapData, JUMP_HEAP_DATA_SIZE);
+        ICInvalidateRange(gJumpHeapData, JUMP_HEAP_DATA_SIZE);
     }
 
     DCFlushRange((void *) &replaceWithInstruction, 4);
@@ -330,6 +330,9 @@ PatchedFunctionData::~PatchedFunctionData() {
         MEMFreeToExpHeap(this->heapHandle, this->jumpData);
         this->jumpData = nullptr;
     }
+
+    DCFlushRange(gJumpHeapData, JUMP_HEAP_DATA_SIZE);
+    ICInvalidateRange(gJumpHeapData, JUMP_HEAP_DATA_SIZE);
 }
 
 bool PatchedFunctionData::shouldBePatched() const {

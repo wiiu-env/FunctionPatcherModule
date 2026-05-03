@@ -101,6 +101,9 @@ bool RestoreFunction(std::shared_ptr<PatchedFunctionData> &patchedFunction) {
         return false;
     }
 
+    DCFlushRange(gJumpHeapData, JUMP_HEAP_DATA_SIZE);
+    ICInvalidateRange(gJumpHeapData, JUMP_HEAP_DATA_SIZE);
+
     auto targetAddrPhys = (uint32_t) patchedFunction->realPhysicalFunctionAddress;
 
     if (patchedFunction->library != LIBRARY_OTHER) {
@@ -136,6 +139,9 @@ bool RestoreFunction(std::shared_ptr<PatchedFunctionData> &patchedFunction) {
     KernelCopyData(targetAddrPhys, sourceAddrPhys, 4);
     ICInvalidateRange((void *) patchedFunction->realEffectiveFunctionAddress, 4);
     DCFlushRange((void *) patchedFunction->realEffectiveFunctionAddress, 4);
+
+    DCFlushRange(gJumpHeapData, JUMP_HEAP_DATA_SIZE);
+    ICInvalidateRange(gJumpHeapData, JUMP_HEAP_DATA_SIZE);
 
     patchedFunction->isPatched = false;
     return true;
