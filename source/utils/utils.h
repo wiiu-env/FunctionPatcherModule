@@ -12,3 +12,5 @@ std::shared_ptr<T> make_shared_nothrow(Args &&...args) noexcept(noexcept(T(std::
 }
 
 bool ReadFromPhysicalAddress(uint32_t srcPhys, uint32_t *out);
+
+void CheckMemExpHeapJumpData();
