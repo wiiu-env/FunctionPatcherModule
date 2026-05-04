@@ -95,7 +95,8 @@ FunctionPatcherStatus FPRemoveFunctionPatch(PatchedFunctionHandle handle) {
         return FUNCTION_PATCHER_RESULT_PATCH_NOT_FOUND;
     }
 
-    if (toBeRemoved->isPatched) {
+    bool functionWasPatched = toBeRemoved->isPatched;
+    if (functionWasPatched) {
         // Restore function patches that were done after the patch we actually want to restore.
         for (auto &cur : std::ranges::reverse_view(toBeTempRestored)) {
             RestoreFunction(cur);
@@ -107,7 +108,7 @@ FunctionPatcherStatus FPRemoveFunctionPatch(PatchedFunctionHandle handle) {
 
     gPatchedFunctions.erase(gPatchedFunctions.begin() + erasePosition);
 
-    if (toBeRemoved->isPatched) {
+    if (functionWasPatched) {
         // Apply the other patches again
         for (auto &cur : toBeTempRestored) {
             PatchFunction(cur);
