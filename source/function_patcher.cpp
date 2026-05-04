@@ -63,6 +63,9 @@ bool PatchFunction(std::shared_ptr<PatchedFunctionData> &patchedFunction) {
         return false;
     }
 
+    DCFlushRange(gJumpHeapData, JUMP_HEAP_DATA_SIZE);
+    ICInvalidateRange(gJumpHeapData, JUMP_HEAP_DATA_SIZE);
+
     if (patchedFunction->functionName) {
         DEBUG_FUNCTION_LINE("Patching function %s...", patchedFunction->functionName->c_str());
     } else {
@@ -84,6 +87,9 @@ bool PatchFunction(std::shared_ptr<PatchedFunctionData> &patchedFunction) {
 
     // Write this->replaceWithInstruction to the first instruction of the function we want to replace.
     CThread::runOnAllCores(writeDataAndFlushIC, patchedFunction.get());
+
+    DCFlushRange(gJumpHeapData, JUMP_HEAP_DATA_SIZE);
+    ICInvalidateRange(gJumpHeapData, JUMP_HEAP_DATA_SIZE);
 
     // Set patch status
     patchedFunction->isPatched = true;
