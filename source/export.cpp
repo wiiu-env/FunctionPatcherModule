@@ -38,22 +38,21 @@ FunctionPatcherStatus FPAddFunctionPatch(function_replacement_data_t *function_d
         return FUNCTION_PATCHER_RESULT_UNKNOWN_ERROR;
     }
 
-    auto &functionData = functionDataOpt.value();
-
-    // PatchFunction calls OSFatal on fatal errors.
-    // If this function returns false the target function was not patched
-    // Usually this means the target RPL is not (yet) loaded.
-    auto patchResult = PatchFunction(functionData);
-    if (outHasBeenPatched) {
-        *outHasBeenPatched = patchResult;
-    }
-
-    if (outHandle) {
-        *outHandle = functionData->getHandle();
-    }
-
     {
         std::lock_guard lock(gPatchedFunctionsMutex);
+        auto &functionData = functionDataOpt.value();
+        // PatchFunction calls OSFatal on fatal errors.
+        // If this function returns false the target function was not patched
+        // Usually this means the target RPL is not (yet) loaded.
+        auto patchResult = PatchFunction(functionData);
+        if (outHasBeenPatched) {
+            *outHasBeenPatched = patchResult;
+        }
+
+        if (outHandle) {
+            *outHandle = functionData->getHandle();
+        }
+
         gPatchedFunctions.push_back(std::move(functionData));
 
         OSMemoryBarrier();
